@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ForLife Companion</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23038262'/><text x='16' y='23' font-size='20' text-anchor='middle' fill='%23faf6ee' font-family='Georgia,serif' font-weight='700'>F</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ForLife tokens, taken from forlife.care */
+  :root {
+    --green-100: #e3f3ee; --green-500: #2da382; --green-700: #038262; --green-900: #025a44;
+    --deep: #04382b; --mint: #9fd9c6; --cream: #faf6ee;
+    --surface-0: #fff; --surface-1: #fafaf8; --surface-2: #f4f5f2;
+    --ink-900: #111; --ink-700: #2a2a2a; --ink-500: #6b7280; --line: #e5e7eb; --danger: #b42318;
+    --radius-card: 12px; --radius-pill: 999px;
+    --shadow-1: 0 1px 2px #1111110a, 0 2px 8px #1111110d;
+    --shadow-2: 0 18px 50px #022e2224, 0 6px 16px #1111111a;
+    --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+    --font-sans: "Source Sans 3", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex; flex-direction: column; height: 100dvh;
+    background: var(--surface-1); color: var(--ink-700);
+    font: 400 16px/1.55 var(--font-sans); -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible { outline: 2px solid var(--green-700); outline-offset: 2px; }
+
+  /* header */
+  header {
+    flex: none; display: flex; align-items: center; justify-content: space-between;
+    height: 60px; padding: 0 max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left));
+    background: var(--deep);
+  }
+  header img { height: 28px; width: auto; display: block; }
+  .tag {
+    padding: 5px 13px; border-radius: var(--radius-pill); font-size: 13px; font-weight: 500;
+    color: rgba(250,246,238,.85); background: rgba(250,246,238,.08); border: 1px solid rgba(250,246,238,.25);
+  }
+
+  /* thread */
+  #thread { flex: 1; overflow-y: auto; scroll-behavior: smooth; overscroll-behavior: contain; }
+  .wrap { width: 100%; max-width: 760px; margin: 0 auto; padding: 24px 16px 8px; }
+  .row { display: flex; gap: 10px; margin: 0 0 16px; align-items: flex-start; scroll-margin-top: 16px; }
+  .row.user { justify-content: flex-end; }
+  .avatar {
+    flex: none; width: 32px; height: 32px; border-radius: 50%; margin-top: 2px;
+    display: grid; place-items: center; background: var(--green-700); color: var(--cream);
+    font: 600 17px/1 var(--font-display);
+  }
+  .col { max-width: min(86%, 600px); min-width: 0; }
+  .row.user .col { display: flex; flex-direction: column; align-items: flex-end; }
+  .bubble { padding: 11px 15px; font-size: 16.5px; line-height: 1.6; overflow-wrap: anywhere; }
+  .assistant .bubble {
+    background: var(--surface-0); border: 1px solid var(--line); border-radius: 4px 16px 16px 16px;
+    box-shadow: var(--shadow-1); color: var(--ink-700);
+  }
+  .user .bubble { background: var(--green-700); color: var(--cream); border-radius: 16px 16px 4px 16px; white-space: pre-wrap; }
+  .bubble p { margin: 0 0 .7em; } .bubble p:last-child, .bubble ul:last-child, .bubble ol:last-child { margin-bottom: 0; }
+  .bubble ul, .bubble ol { margin: 0 0 .7em; padding-left: 1.25em; } .bubble li { margin: .25em 0; }
+  .bubble strong { font-weight: 600; color: var(--ink-900); }
+  .meta { margin-top: 4px; font-size: 12px; color: var(--ink-500); }
+  .day { display: flex; justify-content: center; margin: 4px 0 16px; }
+  .day span { font-size: 12px; font-weight: 500; color: var(--ink-500); background: var(--surface-2); padding: 3px 12px; border-radius: var(--radius-pill); }
+
+  /* the structured part of an assessment: collapsible condition cards, action boxes, the coming-soon card */
+  .assistant .col { max-width: min(92%, 660px); }
+  .col > * + * { margin-top: 8px; }
+  .col > .meta { margin-top: 6px; }
+  .box-title { font: 600 12px/1.3 var(--font-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-500); }
+  .label { font-weight: 600; color: var(--ink-900); }
+
+
+  .assess { margin-top: 10px; display: grid; gap: 10px; }
+  .cond { background: var(--surface-0); border: 1px solid var(--line); border-radius: var(--radius-card); box-shadow: var(--shadow-1); }
+  .cond.most_likely { border-left: 4px solid var(--green-700); }
+  .cond.least_likely { background: var(--surface-1); box-shadow: none; }
+  .cond summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; align-items: center; padding: 13px 16px; min-height: 44px; border-radius: var(--radius-card); }
+  .cond summary::-webkit-details-marker { display: none; }
+  .cond summary > :not(.chev) { grid-column: 1; }
+  .cond summary h4 { margin: 0; font: 600 19px/1.25 var(--font-display); color: var(--ink-900); letter-spacing: -.005em; }
+  .cond.likely summary h4 { font-size: 17.5px; } .cond.least_likely summary h4 { font-size: 16.5px; }
+  .cond summary .risk { justify-self: start; }
+  .chev { grid-column: 2; grid-row: 1 / span 3; width: 9px; height: 9px; margin-right: 4px; border-right: 2px solid var(--ink-500); border-bottom: 2px solid var(--ink-500); transform: rotate(45deg); transition: transform .15s; }
+  .cond[open] > summary .chev { transform: rotate(-135deg); }
+  .cond[open] > summary { padding-bottom: 8px; }
+  .cond-body { padding: 0 16px 15px; }
+  .tier-label { font: 600 12px/1 var(--font-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-500); }
+  .tier-label.most_likely { color: var(--green-700); }
+  .fits { list-style: none; margin: 6px 0 0; padding: 0; }
+  .fits li { position: relative; margin: 7px 0; padding-left: 1.1em; font-size: 15.5px; line-height: 1.5; }
+  .fits li::before { content: ""; position: absolute; left: .1em; top: .6em; width: 6px; height: 6px; border-radius: 50%; background: var(--green-500); }
+  .fits strong { font-weight: 600; color: var(--ink-900); }
+  .because { color: var(--ink-700); }
+  .against { margin: 10px 0 0; font-size: 14.5px; color: var(--ink-500); }
+  .cnote { margin: 10px 0 0; padding-top: 10px; border-top: 1px solid var(--line); font-size: 15px; color: var(--ink-700); }
+  .risk { display: inline-flex; align-items: center; gap: 7px; padding: 2px 12px 2px 10px; border-radius: var(--radius-pill); font-size: 14.5px; font-weight: 600; line-height: 1.5; }
+  .risk i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .risk-low { background: #e3f3ee; color: #025a44; }
+  .risk-moderate { background: #fef3e2; color: #9a5b0b; }
+  .risk-high { background: #fde6cf; color: #8a4a06; }
+  .risk-very_high { background: #fbd9c9; color: #9c3410; }
+  .risk-critical { background: #fde8e6; color: #b42318; box-shadow: inset 0 0 0 1px #fecdca; }
+  .legend { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--ink-500); }
+
+  .dosome, .safety { padding: 13px 16px; border-radius: var(--radius-card); font-size: 15.5px; }
+  .dosome { background: var(--green-100); border: 1px solid #cfe8df; border-left: 4px solid var(--green-700); }
+  .dosome .box-title, .safety .box-title { margin-bottom: 6px; color: var(--green-900); }
+  .safety { background: var(--cream); border: 1px solid #e6ddd3; border-left: 4px solid var(--deep); }
+  .dosome ol, .safety ul { margin: 0; padding-left: 1.25em; } .dosome li, .safety li { margin: .25em 0; }
+  .soon { padding: 14px 16px 16px; border-radius: var(--radius-card); background: var(--deep); color: var(--cream); }
+  .soon-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+  .soon-tag { padding: 2px 10px; border-radius: var(--radius-pill); font: 600 12px/1.5 var(--font-sans); letter-spacing: .06em; text-transform: uppercase; color: var(--deep); background: var(--mint); }
+  .soon-title { font: 600 17px/1.3 var(--font-display); }
+  .soon-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .soon-btn { padding: 9px 16px; border-radius: var(--radius-pill); border: 1px solid rgba(250,246,238,.3); background: rgba(250,246,238,.08); color: rgba(250,246,238,.75); font: 500 15px/1.2 var(--font-sans); cursor: not-allowed; }
+  .assistant .bubble.urgent { background: #fef3f2; border: 1.5px solid #fda29b; }
+  .urgent-label { margin-bottom: 4px; font: 600 12px/1.3 var(--font-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--danger); }
+
+  /* thinking indicator */
+  .thinking { display: flex; align-items: center; gap: 10px; color: var(--ink-500); font-size: 15px; }
+  .dots { display: inline-flex; gap: 4px; }
+  .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--green-500); animation: bounce 1.2s infinite ease-in-out; }
+  .dots i:nth-child(2) { animation-delay: .15s; } .dots i:nth-child(3) { animation-delay: .3s; }
+  @keyframes bounce { 0%, 80%, 100% { opacity: .3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+
+  /* empty state */
+  #hero { padding: 7vh 0 12px; text-align: center; }
+  #hero .eyebrow { font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--green-700); }
+  #hero h1 { margin: 10px 0 10px; font: 600 clamp(28px, 5vw, 38px)/1.15 var(--font-display); color: var(--ink-900); letter-spacing: -.01em; }
+  #hero p { margin: 0 auto 24px; max-width: 460px; color: var(--ink-500); font-size: 17px; }
+  .chips { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .chip {
+    max-width: 100%; padding: 10px 18px; font: 500 15.5px/1.35 var(--font-sans); color: var(--ink-700); text-align: left;
+    background: var(--surface-0); border: 1px solid var(--line); border-radius: var(--radius-pill); cursor: pointer;
+    box-shadow: var(--shadow-1); transition: background .15s, border-color .15s;
+  }
+  .chip:hover { background: var(--green-100); border-color: var(--green-500); }
+
+  /* composer */
+  footer { flex: none; background: var(--surface-0); border-top: 1px solid var(--line); padding: 12px 16px max(12px, env(safe-area-inset-bottom)); }
+  footer .inner { max-width: 760px; margin: 0 auto; }
+  #banner { margin: 0 0 10px; padding: 9px 14px; border-radius: var(--radius-card); font-size: 14.5px; color: var(--danger); background: #fef3f2; border: 1px solid #fecdca; }
+  form.composer {
+    display: flex; align-items: flex-end; gap: 8px; padding: 6px 6px 6px 16px; background: var(--surface-0);
+    border: 1px solid var(--line); border-radius: 24px; box-shadow: var(--shadow-1); transition: border-color .15s, box-shadow .15s;
+  }
+  form.composer:focus-within { border-color: var(--green-700); box-shadow: 0 0 0 3px var(--green-100); }
+  textarea {
+    flex: 1; min-width: 0; resize: none; border: 0; outline: 0; background: transparent; color: var(--ink-900);
+    font: 400 16px/1.5 var(--font-sans); padding: 8px 0; max-height: 140px;
+  }
+  textarea:focus-visible { outline: 0; }  /* the composer's own green ring shows focus instead */
+  textarea::placeholder { color: var(--ink-500); }
+  .send {
+    flex: none; width: 40px; height: 40px; border: 0; border-radius: 50%; cursor: pointer;
+    display: grid; place-items: center; color: var(--cream); background: var(--green-700); transition: background .15s;
+  }
+  .send:hover:not(:disabled) { background: var(--green-900); } .send:disabled { opacity: .4; cursor: default; }
+  .note { margin: 8px 0 0; text-align: center; font-size: 12px; color: var(--ink-500); }
+
+  /* password screen */
+  #gate { flex: 1; display: none; align-items: center; justify-content: center; padding: 24px 16px; }
+  .card { width: 100%; max-width: 380px; padding: 28px; background: var(--surface-0); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow-2); }
+  .card h2 { margin: 0 0 6px; font: 600 26px/1.2 var(--font-display); color: var(--ink-900); }
+  .card p { margin: 0 0 18px; color: var(--ink-500); }
+  .card input { width: 100%; padding: 12px 16px; font: 400 16px var(--font-sans); border: 1px solid var(--line); border-radius: var(--radius-pill); background: var(--surface-1); }
+  .card input:focus { outline: 0; border-color: var(--green-700); box-shadow: 0 0 0 3px var(--green-100); }
+  .card button { width: 100%; margin-top: 12px; padding: 12px; font: 600 16px var(--font-sans); color: var(--cream); background: var(--green-700); border: 0; border-radius: var(--radius-pill); cursor: pointer; }
+  .card button:hover { background: var(--green-900); }
+  #gate-error { min-height: 20px; margin: 10px 0 0; font-size: 14px; color: var(--danger); }
+  body[data-view="gate"] #gate { display: flex; }
+  body[data-view="gate"] #thread, body[data-view="gate"] footer { display: none; }
+
+  @media (max-width: 520px) {
+    .wrap { padding-top: 16px; } .col { max-width: 90%; } #hero { padding-top: 4vh; }
+    .bubble { font-size: 16px; }
+  }
+  @media (prefers-reduced-motion: reduce) { #thread { scroll-behavior: auto; } .dots i { animation: none; opacity: .7; } }
+</style>
+</head>
+<body data-view="gate">
+<header>
+  <img src="/static/forlife-cream.png" alt="ForLife">
+  <span class="tag">Health companion</span>
+</header>
+
+<section id="gate">
+  <form class="card" id="gate-form" autocomplete="off">
+    <h2>Welcome</h2>
+    <p>Enter the access password to continue.</p>
+    <input id="gate-input" type="password" placeholder="Password" aria-label="Access password" autocomplete="off" required>
+    <button type="submit">Continue</button>
+    <div id="gate-error" role="alert"></div>
+  </form>
+</section>
+
+<main id="thread" aria-live="polite">
+  <div class="wrap" id="messages">
+    <section id="hero">
+      <div class="eyebrow">ForLife Companion</div>
+      <h1>What&rsquo;s worrying you today?</h1>
+      <p>Tell me about a symptom, for yourself or someone in your family. I&rsquo;ll remember what we&rsquo;ve talked about.</p>
+      <div class="chips">
+        <button class="chip" type="button">My father has had headaches every morning for a week</button>
+        <button class="chip" type="button">My son has a blocked nose and yellow mucus</button>
+        <button class="chip" type="button">I catch a cold every time I sit under the AC</button>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer>
+  <div class="inner">
+    <div id="banner" role="alert" hidden></div>
+    <form class="composer" id="composer">
+      <textarea id="input" rows="1" placeholder="Describe what&rsquo;s going on&hellip;" aria-label="Your message" maxlength="4000"></textarea>
+      <button class="send" id="send" type="submit" aria-label="Send message" disabled>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+      </button>
+    </form>
+    <p class="note">AI companion, not a doctor. In an emergency, call 112.</p>
+  </div>
+</footer>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
+function uuid4() {
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40; b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
+let password = store.get('fl_password') || '';
+let visitorId = store.get('fl_visitor') || uuid4();
+store.set('fl_visitor', visitorId);
+let lastDay = '';
+
+const thread = $('thread'), messages = $('messages'), input = $('input'), send = $('send'), banner = $('banner');
+
+/* ---- talking to the backend ---- */
+async function api(path, options = {}) {
+  const res = await fetch(path, { ...options, headers: { 'Content-Type': 'application/json', 'X-Password': password } });
+  if (res.status === 401) { showGate("That password didn't work."); throw new Error('auth'); }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Something went wrong. Please try again.');
+  return data;
+}
+
+/* ---- rendering: everything is escaped first, then a tiny safe subset (bold, lists, paragraphs) ---- */
+const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const inline = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+function renderMarkdown(text) {
+  const out = []; let para = [], list = null;
+  const flushPara = () => { if (para.length) { out.push(`<p>${para.join('<br>')}</p>`); para = []; } };
+  const flushList = () => { if (list) { out.push(`<${list.tag}>${list.items.map((i) => `<li>${i}</li>`).join('')}</${list.tag}>`); list = null; } };
+  for (const raw of text.split('\n')) {
+    const line = raw.trimEnd(); let m;
+    if (!line.trim()) { flushPara(); flushList(); continue; }
+    if ((m = line.match(/^\s*[-*•]\s+(.*)$/))) { flushPara(); if (!list || list.tag !== 'ul') { flushList(); list = { tag: 'ul', items: [] }; } list.items.push(inline(m[1])); continue; }
+    if ((m = line.match(/^\s*\d+[.)]\s+(.*)$/))) { flushPara(); if (!list || list.tag !== 'ol') { flushList(); list = { tag: 'ol', items: [] }; } list.items.push(inline(m[1])); continue; }
+    flushList(); para.push(inline(line.replace(/^#+\s*/, '')));
+  }
+  flushPara(); flushList();
+  return out.join('');
+}
+
+/* A doctor message is JSON from the backend: a plain reply, or an assessment (cards, steps, when to see a doctor). */
+const TIER = { most_likely: 'Most likely', likely: 'Likely', least_likely: 'Least likely' };
+const RISK = { low: 'Low', moderate: 'Moderate', high: 'High', very_high: 'Very high', critical: 'Critical' };
+const list = (a) => (Array.isArray(a) ? a : []).filter((x) => x != null && x !== '');
+const bare = (s) => String(s).replace(/^\s*(?:\d+[.)]|[-\u2022*])\s+/, '');   // the page adds numbers and bullets itself
+const ol = (a) => `<ol>${a.map((s) => `<li>${inline(bare(s))}</li>`).join('')}</ol>`;
+const ul = (a) => `<ul>${a.map((s) => `<li>${inline(bare(s))}</li>`).join('')}</ul>`;
+
+function parseReply(content) {
+  try {
+    const d = JSON.parse(content);
+    if (d && typeof d === 'object') return d;
+  } catch {}
+  return { message: content };  // not JSON: show as plain text
+}
+
+function conditionCard(c) {
+  const tier = TIER[c.likelihood] ? c.likelihood : 'likely';   // only known values ever reach a class name
+  const risk = RISK[c.medical_risk] ? c.medical_risk : 'moderate';
+  const fits = list(c.fits).map((f) => `<li><strong>${inline(String(f.feeling || ''))}</strong>${f.because ? `<span class="because"> &mdash; ${inline(String(f.because))}</span>` : ''}</li>`).join('');
+  const against = list(c.against).map((s) => inline(String(s))).join(' &middot; ');
+  return `<details class="cond ${tier}"${tier === 'most_likely' ? ' open' : ''}>
+    <summary>
+      <span class="tier-label ${tier}">${TIER[tier]}</span>
+      <h4>${esc(String(c.name || ''))}</h4>
+      <span class="risk risk-${risk}"><i></i>Medical risk: ${RISK[risk]}</span>
+      <span class="chev" aria-hidden="true"></span>
+    </summary>
+    <div class="cond-body">
+      ${fits ? `<div class="label">Indicative symptoms:</div><ul class="fits">${fits}</ul>` : ''}
+      ${against ? `<p class="against"><span class="label">Doesn't fit:</span> ${against}</p>` : ''}
+      ${c.note ? `<p class="cnote">${inline(String(c.note))}</p>` : ''}
+    </div>
+  </details>`;
+}
+
+const SOON = `<aside class="soon" aria-label="Coming soon in version 2">
+    <div class="soon-head"><span class="soon-tag">Coming soon &middot; V2</span><span class="soon-title">Take the next step, right here</span></div>
+    <div class="soon-actions">
+      <button class="soon-btn" type="button" disabled title="Coming soon">Book a doctor appointment</button>
+      <button class="soon-btn" type="button" disabled title="Coming soon">Get remedial therapies</button>
+    </div>
+  </aside>`;
+
+function renderAssistant(content) {
+  const d = parseReply(content);
+  const text = [d.reply, d.headline, d.message].find((t) => typeof t === 'string') || '';
+  const emergency = d.kind === 'emergency' || d.emergency === true;
+  const conditions = list(d.conditions), doNow = list(d.do_now), see = list(d.see_a_doctor_if);
+  let html = emergency
+    ? `<div class="bubble urgent"><div class="urgent-label">Please get help now</div><p>${inline(text)}</p>${doNow.length ? ol(doNow) : ''}</div>`
+    : `<div class="bubble">${inline(text)}</div>`;
+  if (conditions.length) {
+    html += `<section class="assess" aria-label="What this could be">${conditions.map(conditionCard).join('')}
+      <p class="legend">Tap a card to open or close it. Medical risk shows how serious a condition can be if it is the cause, not how likely it is.</p></section>`;
+  }
+  if (!emergency && doNow.length) html += `<aside class="dosome"><div class="box-title">What you can do now</div>${ol(doNow)}</aside>`;
+  if (see.length) html += `<aside class="safety"><div class="box-title">See a doctor if</div>${ul(see)}</aside>`;
+  if (conditions.length) html += SOON;   // after an assessment only
+  const older = d.kind ? [] : list(d.questions || (d.question ? [d.question] : []));   // chats saved in the old question-list format
+  if (older.length) html += `<div class="bubble">${ol(older)}</div>`;
+  return html;
+}
+
+function dayLabel(d) {
+  const today = new Date(), yest = new Date(); yest.setDate(today.getDate() - 1);
+  if (d.toDateString() === today.toDateString()) return 'Today';
+  if (d.toDateString() === yest.toDateString()) return 'Yesterday';
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function addMessage(role, content, at) {
+  const added = [], when = new Date(at), prevDay = lastDay;
+  document.getElementById('hero').hidden = true;
+  if (when.toDateString() !== lastDay) {
+    lastDay = when.toDateString();
+    const day = document.createElement('div'); day.className = 'day';
+    day.innerHTML = `<span>${dayLabel(when)}</span>`; messages.append(day); added.push(day);
+  }
+  const row = document.createElement('div'); row.className = `row ${role}`;
+  const time = when.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+  const body = role === 'assistant' ? renderAssistant(content) : `<div class="bubble">${esc(content)}</div>`;
+  row.innerHTML = (role === 'assistant' ? '<div class="avatar" aria-hidden="true">F</div>' : '') +
+    `<div class="col">${body}<div class="meta">${time}</div></div>`;
+  messages.append(row); added.push(row);
+  return { row, remove: () => { added.forEach((e) => e.remove()); if (added.length === 2) lastDay = prevDay; } };
+}
+
+function addThinking() {
+  const row = document.createElement('div'); row.className = 'row assistant';
+  row.innerHTML = '<div class="avatar" aria-hidden="true">F</div><div class="col"><div class="bubble thinking"><span class="dots"><i></i><i></i><i></i></span>Thinking it through&hellip;</div></div>';
+  messages.append(row); thread.scrollTo({ top: thread.scrollHeight });
+  return row;
+}
+
+/* ---- screens ---- */
+function showGate(msg = '') { document.body.dataset.view = 'gate'; $('gate-error').textContent = msg; $('gate-input').focus(); }
+function showChat() { document.body.dataset.view = 'chat'; input.focus(); }
+function showBanner(msg) { banner.textContent = msg; banner.hidden = false; }
+
+async function loadHistory() {
+  const rows = await api(`/history?visitor_id=${visitorId}`);
+  rows.forEach((r) => addMessage(r.role, r.content, r.at));
+  showChat();
+  thread.scrollTo({ top: thread.scrollHeight, behavior: 'instant' });
+}
+
+/* ---- sending ---- */
+function setBusy(busy) { input.disabled = busy; send.disabled = busy || !input.value.trim(); }
+function autosize() { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 140) + 'px'; }
+
+async function sendMessage(text) {
+  banner.hidden = true;
+  const mine = addMessage('user', text, new Date().toISOString());
+  thread.scrollTo({ top: thread.scrollHeight });
+  const waiting = addThinking();
+  input.value = ''; autosize(); setBusy(true);
+  try {
+    const data = await api('/chat', { method: 'POST', body: JSON.stringify({ visitor_id: visitorId, text }) });
+    waiting.remove();
+    addMessage('assistant', data.reply, data.at).row.scrollIntoView({ block: 'start' });
+  } catch (e) {
+    waiting.remove(); mine.remove();                 // the message wasn't saved, so take it off the screen
+    if (!messages.querySelector('.row')) document.getElementById('hero').hidden = false;
+    if (e.message !== 'auth') showBanner(e.message);
+    input.value = text; autosize();                  // and give the text back so nothing is lost
+  } finally {
+    setBusy(false); if (document.body.dataset.view === 'chat') input.focus();
+  }
+}
+
+$('composer').addEventListener('submit', (e) => { e.preventDefault(); const t = input.value.trim(); if (t) sendMessage(t); });
+input.addEventListener('input', () => { autosize(); send.disabled = !input.value.trim(); });
+input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('composer').requestSubmit(); } });
+document.querySelectorAll('.chip').forEach((c) => c.addEventListener('click', () => sendMessage(c.textContent)));
+
+$('gate-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const tried = $('gate-input').value.trim(); if (!tried) return;
+  password = tried;
+  try { await loadHistory(); store.set('fl_password', password); }
+  catch (err) { if (err.message !== 'auth') showGate(err.message); }
+});
+
+(async () => {
+  if (!password) return showGate();
+  try { await loadHistory(); } catch (err) { if (err.message !== 'auth') { showChat(); showBanner(err.message); } }
+})();
+</script>
+</body>
+</html>

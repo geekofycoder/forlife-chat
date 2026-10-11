@@ -1,0 +1,19 @@
+# Render Blueprint: one free web service in Singapore.
+# Secrets are NOT stored here. Render asks you for them (sync: false) when you create the service.
+# If your Anthropic key is not tied to one workspace, also add ANTHROPIC_WORKSPACE_ID on the service's Environment page.
+services:
+  - type: web
+    name: forlife-chat
+    runtime: python          # the Python version comes from .python-version
+    plan: free
+    region: singapore
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: SHARED_PASSWORD
+        sync: false
