@@ -16,7 +16,7 @@ import secrets
 import time
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
@@ -28,7 +28,8 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from prompts import CONCLUSION_PROMPT, CONCLUSION_SCHEMA, INTERVIEW_PROMPT, INTERVIEW_SCHEMA
+import family
+from prompts import CONCLUSION_PROMPT, CONCLUSION_SCHEMA, GROUP_RULES, GROUP_TITLES, INTERVIEW_PROMPT, INTERVIEW_SCHEMA
 
 log = logging.getLogger("forlife")
 log.setLevel(logging.INFO)
@@ -46,8 +47,9 @@ CONFIDENCE_TO_CONCLUDE = 70  # confidence needed before the assessment is given
 MIN_QUESTIONS = 3            # never give the assessment before this many questions have been asked
 MAX_QUESTIONS = 8            # always give it once this many have been asked
 
+MEMBER_COLUMNS = "id, relation, name, dob, sex, conditions, medicines, allergies"
 REFUSAL = {"kind": "refusal", "reply": "Sorry, I can't help with that one. If this is urgent, please call 112 or see a doctor."}
-HIDDEN = ("confidence", "reopened", "state")  # kept in the database for the server, never sent to the browser
+HIDDEN = ("confidence", "reopened", "state", "patient")  # kept in the database for the server, never sent to the browser
 
 
 @asynccontextmanager
@@ -104,6 +106,15 @@ async def db_run(method: str, *args):
         return await getattr(app.state.db, method)(*args)
 
 
+async def load_members(visitor_id):
+    """This visitor's family profiles. If the table has not been created yet, carry on without a family file."""
+    try:
+        return await db_run("fetch", f"select {MEMBER_COLUMNS} from members where visitor_id = $1 order by created_at", visitor_id)
+    except asyncpg.UndefinedTableError:
+        log.warning("The members table does not exist yet: run schema.sql in the Supabase SQL editor. Continuing without a family file.")
+        return []
+
+
 def check_password(x_password: str = Header(default="")):
     if not secrets.compare_digest(x_password.encode(), os.environ["SHARED_PASSWORD"].encode()):
         raise HTTPException(401, "Wrong password")
@@ -142,6 +153,16 @@ def read_stage(rows) -> tuple[str, int]:
     return stage, asked
 
 
+def last_patient(rows) -> str:
+    """The person the doctor last said the chat was about (empty if never identified)."""
+    for r in reversed(rows):
+        if r["role"] == "assistant":
+            who = as_dict(r["content"]).get("patient")
+            if who:
+                return who
+    return ""
+
+
 def spoken(raw: str) -> str:
     """What the doctor said, as plain text, for the transcript Claude sees (hidden notes and cards are not repeated)."""
     d = as_dict(raw)
@@ -149,7 +170,8 @@ def spoken(raw: str) -> str:
         return raw or "..."
     if kind_of(d) == "conclusion":
         names = ", ".join(c.get("name", "") for c in d.get("conditions", []) if isinstance(c, dict))
-        return f"{d.get('headline', '')} (I showed my assessment: {names}.)".strip()
+        who = f" for {d['patient_label']}" if d.get("patient_label") else ""
+        return f"{d.get('headline', '')} (I showed my assessment{who}: {names}.)".strip()
     return d.get("reply") or d.get("headline") or d.get("message") or "..."  # last two: chats saved in earlier formats
 
 
@@ -173,6 +195,8 @@ def decide(stage: str, asked_before: int, iv: dict) -> tuple[str, str]:
     if iv["emergency"]:
         return "emergency", "emergency"
     if stage == "assessed":
+        if iv.get("switched"):
+            return "ask", "a different person"
         if confidence < CONFIDENCE_TO_CONCLUDE:
             return "ask", "new information lowered confidence"
         return "answer", "follow-up"
@@ -237,6 +261,49 @@ class ChatIn(BaseModel):
     text: str = Field(max_length=4000)
 
 
+class MemberIn(BaseModel):
+    visitor_id: uuid.UUID
+    relation: str
+    name: str = Field(max_length=200)
+    dob: date
+    sex: str
+    conditions: str = Field(default="", max_length=2000)
+    medicines: str = Field(default="", max_length=2000)
+    allergies: str = Field(default="", max_length=2000)
+
+
+@app.get("/family", dependencies=[Depends(check_password)])
+async def get_family(visitor_id: uuid.UUID):
+    try:
+        rows = await db_run("fetch", f"select {MEMBER_COLUMNS} from members where visitor_id = $1 order by created_at", visitor_id)
+    except asyncpg.UndefinedTableError:
+        raise HTTPException(503, "Family profiles are not set up yet. Please tell whoever runs this app.")
+    today = datetime.now(IST).date()
+    members = [family.public_member(r, today) for r in rows]
+    return {"members": members, "needs_profile": not any(m["relation"] == "self" for m in members)}
+
+
+@app.post("/members", dependencies=[Depends(check_password)])
+async def add_member(body: MemberIn):
+    today = datetime.now(IST).date()
+    try:
+        m = family.clean_member(body, today)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    count = await db_run("fetchval", "select count(*) from members where visitor_id = $1", body.visitor_id)
+    if count >= family.MAX_MEMBERS:
+        raise HTTPException(409, f"You can add up to {family.MAX_MEMBERS} people.")
+    try:
+        row = await app.state.db.fetchrow(
+            f"insert into members (visitor_id, relation, name, dob, sex, conditions, medicines, allergies) "
+            f"values ($1, $2, $3, $4, $5, $6, $7, $8) returning {MEMBER_COLUMNS}",
+            body.visitor_id, m["relation"], m["name"], m["dob"], m["sex"], m["conditions"], m["medicines"], m["allergies"],
+        )
+    except asyncpg.UniqueViolationError:
+        raise HTTPException(409, "Your own profile is already set up.")
+    return family.public_member(row, today)
+
+
 @app.get("/", include_in_schema=False)
 def page():
     return FileResponse(STATIC / "index.html")
@@ -266,6 +333,11 @@ async def chat(body: ChatIn):
         "fetch", "select role, content, created_at from messages where visitor_id = $1 order by id", body.visitor_id
     )
     stage, asked_before = read_stage(rows)
+    members = await load_members(body.visitor_id)
+    today = asked.date()
+    file_text = family.family_file(members, today)               # who is in the family, ages, conditions, medicines, allergies
+    blocks = family.group_blocks(members, GROUP_RULES, GROUP_TITLES, today)
+    prev_patient = last_patient(rows)
 
     # 2. the transcript Claude sees: what the patient wrote (with date and time) and what the doctor said
     messages = [
@@ -280,28 +352,50 @@ async def chat(body: ChatIn):
         if stage == "interviewing"
         else "STAGE: the assessment has already been given; the patient is following up."
     )
-    iv = await ask_claude(f"{INTERVIEW_PROMPT}\n{stage_line}", messages, INTERVIEW_SCHEMA, INTERVIEW_EFFORT, 6000, interview_ok)
+    system = "\n\n".join(part for part in (INTERVIEW_PROMPT, file_text, blocks, stage_line) if part)
+    iv = await ask_claude(system, messages, INTERVIEW_SCHEMA, INTERVIEW_EFFORT, 6000, interview_ok)
     if iv is None:
         content = REFUSAL
     else:
         iv["confidence"] = percent(iv.get("confidence"))
         iv["ready_now"] = bool(iv.get("ready_now"))
+        iv["patient"] = family.clean_text(iv.get("patient"))
+        iv["switched"] = bool(iv["patient"] and prev_patient and iv["patient"].casefold() != prev_patient.casefold())
         action, reason = decide(stage, asked_before, iv)
         log.info(
-            "question %d | confidence %d (need %d) | %s: %s | %ss",
-            asked_before + 1, iv["confidence"], CONFIDENCE_TO_CONCLUDE, action, reason, iv["_seconds"],
+            "question %d | patient %s | confidence %d (need %d) | %s: %s | %ss",
+            asked_before + 1, iv["patient"] or "?", iv["confidence"], CONFIDENCE_TO_CONCLUDE, action, reason, iv["_seconds"],
         )
         if action == "conclude":
-            cc = await ask_claude(CONCLUSION_PROMPT, messages, CONCLUSION_SCHEMA, EFFORT, 8000, conclusion_ok)
+            member = family.match_patient(members, iv["patient"])
+            if member:
+                a = family.describe(member["dob"], today)
+                floor = family.FLOORS.get(a["group"])
+                who = f"PATIENT FOR THIS ASSESSMENT: {member['name']}, {a['text']} ({a['label']})." + (
+                    f" Group floor: every condition at least {floor}." if floor else ""
+                )
+            else:
+                who = "PATIENT FOR THIS ASSESSMENT: not identified; use the person the latest complaint is about."
+            system = "\n\n".join(part for part in (CONCLUSION_PROMPT, file_text, blocks, who) if part)
+            cc = await ask_claude(system, messages, CONCLUSION_SCHEMA, EFFORT, 8000, conclusion_ok)
             log.info("assessment written in %ss", cc["_seconds"] if cc else "-")
-            if cc:
+            if cc is None:
+                content = REFUSAL
+            else:
                 cc.pop("_seconds")
-            content = REFUSAL if cc is None else {"kind": "conclusion", **cc, "confidence": iv["confidence"]}
+                extra = {}
+                if member:
+                    raised = family.apply_floor(cc["conditions"], a["group"])  # backstop, not clinically reviewed
+                    if raised:
+                        log.info("risk floor applied (%s): %s", a["group"], "; ".join(raised))
+                    first = member["name"].split()[0]
+                    extra = {"patient": first, "patient_label": f"{first} · {a['text']} ({a['label']})"}
+                content = {"kind": "conclusion", **cc, **extra, "confidence": iv["confidence"]}
         elif action == "emergency":
-            content = {"kind": "emergency", "reply": iv["reply"], "confidence": iv["confidence"]}
+            content = {"kind": "emergency", "reply": iv["reply"], "confidence": iv["confidence"], "patient": iv["patient"]}
         else:
             content = {
-                "kind": "interview", "reply": iv["reply"], "confidence": iv["confidence"],
+                "kind": "interview", "reply": iv["reply"], "confidence": iv["confidence"], "patient": iv["patient"],
                 "reopened": stage == "assessed" and action == "ask",
             }
     reply = json.dumps(content, ensure_ascii=False)  # stored as-is, hidden fields included

@@ -43,7 +43,7 @@
   }
 
   /* thread */
-  #thread { flex: 1; overflow-y: auto; scroll-behavior: smooth; overscroll-behavior: contain; }
+  #thread { flex: 1; min-height: 0; overflow-y: auto; scroll-behavior: smooth; overscroll-behavior: contain; }
   .wrap { width: 100%; max-width: 760px; margin: 0 auto; padding: 24px 16px 8px; }
   .row { display: flex; gap: 10px; margin: 0 0 16px; align-items: flex-start; scroll-margin-top: 16px; }
   .row.user { justify-content: flex-end; }
@@ -105,6 +105,8 @@
   .risk-high { background: #fde6cf; color: #8a4a06; }
   .risk-very_high { background: #fbd9c9; color: #9c3410; }
   .risk-critical { background: #fde8e6; color: #b42318; box-shadow: inset 0 0 0 1px #fecdca; }
+  .risk-immediate { background: #fde8e6; color: #b42318; box-shadow: inset 0 0 0 1px #fecdca; }
+  .forwho { margin-bottom: 4px; font: 600 12px/1.3 var(--font-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--green-700); }
   .legend { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--ink-500); }
 
   .dosome, .safety { padding: 13px 16px; border-radius: var(--radius-card); font-size: 15.5px; }
@@ -174,7 +176,57 @@
   .card button:hover { background: var(--green-900); }
   #gate-error { min-height: 20px; margin: 10px 0 0; font-size: 14px; color: var(--danger); }
   body[data-view="gate"] #gate { display: flex; }
-  body[data-view="gate"] #thread, body[data-view="gate"] footer { display: none; }
+  body[data-view="gate"] .shell, body[data-view="gate"] #profile, body[data-view="profile"] #gate, body[data-view="profile"] .shell { display: none; }
+
+  /* profile screen (first visit) and the add-member form */
+  #profile { flex: 1; display: none; justify-content: center; align-items: flex-start; padding: 24px 16px; overflow-y: auto; }
+  body[data-view="profile"] #profile { display: flex; }
+  .card.wide { max-width: 520px; }
+  .field { display: block; margin: 0 0 12px; }
+  .field > span { display: block; margin-bottom: 5px; font: 600 13.5px/1.3 var(--font-sans); color: var(--ink-900); }
+  .field em { font-style: normal; font-weight: 400; color: var(--ink-500); }
+  .field input, .field select, .field textarea, .card .field input, .card .field select, .card .field textarea {
+    display: block; width: 100%; max-height: none; padding: 11px 14px; border: 1px solid var(--line); border-radius: 12px;
+    background: var(--surface-1); color: var(--ink-900); font: 400 16px/1.4 var(--font-sans);
+  }
+  .field textarea, .card .field textarea { min-height: 64px; resize: vertical; }
+  .field input:focus, .field select:focus, .field textarea:focus { outline: 0; border-color: var(--green-700); box-shadow: 0 0 0 3px var(--green-100); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .ferror { min-height: 20px; margin: 10px 0 0; font-size: 14px; color: var(--danger); }
+  .more { margin: 0 0 12px; } .more > summary { cursor: pointer; padding: 6px 0; font-weight: 600; color: var(--green-900); }
+  .btn-row { display: flex; gap: 10px; margin-top: 8px; }
+  .btn { flex: 1; padding: 12px; font: 600 16px var(--font-sans); color: var(--cream); background: var(--green-700); border: 0; border-radius: var(--radius-pill); cursor: pointer; }
+  .btn:hover { background: var(--green-900); }
+  .btn.ghost { color: var(--ink-700); background: var(--surface-2); } .btn.ghost:hover { background: #e9ebe6; }
+  #add-modal { position: fixed; inset: 0; z-index: 50; display: none; align-items: center; justify-content: center; padding: 16px; background: rgba(2,46,34,.45); }
+  #add-modal.open { display: flex; }
+  .modal-card { width: 100%; max-width: 480px; max-height: 92dvh; overflow-y: auto; padding: 24px; background: var(--surface-0); border-radius: 20px; box-shadow: var(--shadow-2); }
+  .modal-card h2 { margin: 0 0 14px; font: 600 24px/1.2 var(--font-display); color: var(--ink-900); }
+
+  /* chat layout: family sidebar + chat (the sidebar becomes a slide-out drawer on phones) */
+  .hbrand { display: flex; align-items: center; gap: 12px; }
+  #menu-btn { display: none; width: 38px; height: 38px; place-items: center; border: 1px solid rgba(250,246,238,.25); border-radius: 10px; background: rgba(250,246,238,.08); color: var(--cream); cursor: pointer; }
+  .shell { flex: 1; display: flex; min-height: 0; position: relative; }
+  .chatcol { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  #family { flex: none; width: 280px; padding: 18px 14px; overflow-y: auto; background: var(--surface-0); border-right: 1px solid var(--line); }
+  #family h2 { margin: 0 0 8px 6px; font: 600 12px/1.3 var(--font-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-500); }
+  .member { display: flex; align-items: center; gap: 10px; padding: 9px 8px; border-radius: var(--radius-card); }
+  .member .av { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--green-100); color: var(--green-900); font: 600 16px/1 var(--font-display); }
+  .member.self .av { background: var(--green-700); color: var(--cream); }
+  .member .who { min-width: 0; line-height: 1.3; }
+  .member .nm { font-weight: 600; color: var(--ink-900); overflow-wrap: anywhere; }
+  .member .sub { font-size: 13.5px; color: var(--ink-500); }
+  #add-member-btn { width: 100%; margin-top: 10px; padding: 10px 14px; font: 600 15px var(--font-sans); color: var(--green-900); background: var(--green-100); border: 1px dashed var(--green-500); border-radius: var(--radius-pill); cursor: pointer; }
+  #add-member-btn:hover { background: #d3ece4; }
+  #backdrop { display: none; }
+  @media (max-width: 860px) {
+    body[data-view="chat"] #menu-btn { display: inline-grid; }
+    #family { position: absolute; z-index: 30; top: 0; bottom: 0; left: 0; width: min(320px, 86vw); transform: translateX(-102%); transition: transform .2s; box-shadow: var(--shadow-2); }
+    .shell[data-drawer="open"] #family { transform: none; }
+    #backdrop { position: absolute; inset: 0; z-index: 20; background: rgba(2,46,34,.35); }
+    .shell[data-drawer="open"] #backdrop { display: block; }
+  }
+  @media (max-width: 520px) { .two { grid-template-columns: 1fr; } }
 
   @media (max-width: 520px) {
     .wrap { padding-top: 16px; } .col { max-width: 90%; } #hero { padding-top: 4vh; }
@@ -185,7 +237,12 @@
 </head>
 <body data-view="gate">
 <header>
-  <img src="/static/forlife-cream.png" alt="ForLife">
+  <div class="hbrand">
+    <button id="menu-btn" type="button" aria-label="Open your family list">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+    <img src="/static/forlife-cream.png" alt="ForLife">
+  </div>
   <span class="tag">Health companion</span>
 </header>
 
@@ -199,6 +256,32 @@
   </form>
 </section>
 
+<section id="profile">
+  <form class="card wide" id="profile-form" autocomplete="off">
+    <h2>Let&rsquo;s set up your profile</h2>
+    <p>This helps me give advice that fits you. For the demo, please use made-up details.</p>
+    <label class="field"><span>Your name</span><input id="p-name" maxlength="60" required autocomplete="off"></label>
+    <div class="two">
+      <label class="field"><span>Date of birth</span><input id="p-dob" type="date" min="1900-01-01" required></label>
+      <label class="field"><span>Gender</span>
+        <select id="p-sex" required><option value="" disabled selected>Select</option><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option></select></label>
+    </div>
+    <label class="field"><span>Long-term conditions <em>(optional)</em></span><textarea id="p-conditions" maxlength="500" placeholder="For example diabetes or asthma. Leave blank if none."></textarea></label>
+    <label class="field"><span>Regular medicines <em>(optional)</em></span><textarea id="p-medicines" maxlength="500" placeholder="Leave blank if none."></textarea></label>
+    <label class="field"><span>Allergies <em>(optional)</em></span><textarea id="p-allergies" maxlength="500" placeholder="Medicines, foods or anything else. Leave blank if none."></textarea></label>
+    <button type="submit">Continue</button>
+    <div id="profile-error" class="ferror" role="alert"></div>
+  </form>
+</section>
+
+<div class="shell" data-drawer="closed">
+<aside id="family" aria-label="Your family">
+  <h2>Your family</h2>
+  <div id="family-list"></div>
+  <button id="add-member-btn" type="button">+ Add member</button>
+</aside>
+<div id="backdrop"></div>
+<div class="chatcol">
 <main id="thread" aria-live="polite">
   <div class="wrap" id="messages">
     <section id="hero">
@@ -226,6 +309,29 @@
     <p class="note">AI companion, not a doctor. In an emergency, call 112.</p>
   </div>
 </footer>
+</div>
+</div>
+
+<div id="add-modal" role="dialog" aria-modal="true" aria-labelledby="add-title">
+  <form class="modal-card" id="m-form" autocomplete="off">
+    <h2 id="add-title">Add a family member</h2>
+    <label class="field"><span>Relation</span>
+      <select id="m-relation" required><option value="" disabled selected>Select</option><option value="spouse">Spouse or partner</option><option value="son">Son</option><option value="daughter">Daughter</option><option value="father">Father</option><option value="mother">Mother</option><option value="brother">Brother</option><option value="sister">Sister</option><option value="grandfather">Grandfather</option><option value="grandmother">Grandmother</option><option value="other">Other</option></select></label>
+    <label class="field"><span>Name</span><input id="m-name" maxlength="60" required autocomplete="off"></label>
+    <div class="two">
+      <label class="field"><span>Date of birth</span><input id="m-dob" type="date" min="1900-01-01" required></label>
+      <label class="field"><span>Gender</span>
+        <select id="m-sex" required><option value="" disabled selected>Select</option><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option></select></label>
+    </div>
+    <details class="more"><summary>Health details (optional)</summary>
+      <label class="field"><span>Long-term conditions</span><textarea id="m-conditions" maxlength="500" placeholder="Leave blank if none."></textarea></label>
+      <label class="field"><span>Regular medicines</span><textarea id="m-medicines" maxlength="500" placeholder="Leave blank if none."></textarea></label>
+      <label class="field"><span>Allergies</span><textarea id="m-allergies" maxlength="500" placeholder="Leave blank if none."></textarea></label>
+    </details>
+    <div class="btn-row"><button class="btn ghost" id="m-cancel" type="button">Cancel</button><button class="btn" type="submit">Add</button></div>
+    <div id="m-error" class="ferror" role="alert"></div>
+  </form>
+</div>
 
 <script>
 const $ = (id) => document.getElementById(id);
@@ -276,7 +382,7 @@ function renderMarkdown(text) {
 
 /* A doctor message is JSON from the backend: a plain reply, or an assessment (cards, steps, when to see a doctor). */
 const TIER = { most_likely: 'Most likely', likely: 'Likely', least_likely: 'Least likely' };
-const RISK = { low: 'Low', moderate: 'Moderate', high: 'High', very_high: 'Very high', critical: 'Critical' };
+const RISK = { low: 'Low', moderate: 'Moderate', immediate: 'Immediate doctor visit', high: 'High', very_high: 'Very high', critical: 'Critical' };  // the last three: older chats
 const list = (a) => (Array.isArray(a) ? a : []).filter((x) => x != null && x !== '');
 const bare = (s) => String(s).replace(/^\s*(?:\d+[.)]|[-\u2022*])\s+/, '');   // the page adds numbers and bullets itself
 const ol = (a) => `<ol>${a.map((s) => `<li>${inline(bare(s))}</li>`).join('')}</ol>`;
@@ -325,10 +431,10 @@ function renderAssistant(content) {
   const conditions = list(d.conditions), doNow = list(d.do_now), see = list(d.see_a_doctor_if);
   let html = emergency
     ? `<div class="bubble urgent"><div class="urgent-label">Please get help now</div><p>${inline(text)}</p>${doNow.length ? ol(doNow) : ''}</div>`
-    : `<div class="bubble">${inline(text)}</div>`;
+    : `<div class="bubble">${d.patient_label ? `<div class="forwho">For ${esc(String(d.patient_label))}</div>` : ''}${inline(text)}</div>`;
   if (conditions.length) {
     html += `<section class="assess" aria-label="What this could be">${conditions.map(conditionCard).join('')}
-      <p class="legend">Tap a card to open or close it. Medical risk shows how serious a condition can be if it is the cause, not how likely it is.</p></section>`;
+      <p class="legend">Tap a card to open or close it. Medical risk shows how serious a condition can be for this patient if it is the cause, not how likely it is.</p></section>`;
   }
   if (!emergency && doNow.length) html += `<aside class="dosome"><div class="box-title">What you can do now</div>${ol(doNow)}</aside>`;
   if (see.length) html += `<aside class="safety"><div class="box-title">See a doctor if</div>${ul(see)}</aside>`;
@@ -372,6 +478,7 @@ function addThinking() {
 /* ---- screens ---- */
 function showGate(msg = '') { document.body.dataset.view = 'gate'; $('gate-error').textContent = msg; $('gate-input').focus(); }
 function showChat() { document.body.dataset.view = 'chat'; input.focus(); }
+function showProfile() { document.body.dataset.view = 'profile'; $('p-name').focus(); }
 function showBanner(msg) { banner.textContent = msg; banner.hidden = false; }
 
 async function loadHistory() {
@@ -410,17 +517,67 @@ input.addEventListener('input', () => { autosize(); send.disabled = !input.value
 input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('composer').requestSubmit(); } });
 document.querySelectorAll('.chip').forEach((c) => c.addEventListener('click', () => sendMessage(c.textContent)));
 
+/* ---- family: the roster in the sidebar, the first-visit profile, and the add-member form ---- */
+let family = [];
+const RELATION_LABEL = { self: 'You', spouse: 'Spouse', son: 'Son', daughter: 'Daughter', father: 'Father', mother: 'Mother', brother: 'Brother', sister: 'Sister', grandfather: 'Grandfather', grandmother: 'Grandmother', other: 'Family or friend' };
+const shell = document.querySelector('.shell'), modal = $('add-modal');
+const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+$('p-dob').max = $('m-dob').max = today;
+
+function renderFamily() {
+  $('family-list').innerHTML = family.map((m) => {
+    const me = m.relation === 'self';
+    return `<div class="member${me ? ' self' : ''}"><div class="av" aria-hidden="true">${esc(String(m.name).charAt(0).toUpperCase())}</div>
+      <div class="who"><div class="nm">${esc(String(m.name))}${me ? ' (you)' : ''}</div>
+      <div class="sub">${esc(me ? m.age_text : `${RELATION_LABEL[m.relation] || m.relation} · ${m.age_text}`)}</div></div></div>`;
+  }).join('');
+}
+async function loadFamily() {
+  const data = await api(`/family?visitor_id=${visitorId}`);
+  family = data.members; renderFamily();
+  return data.needs_profile;
+}
+async function enter() {                       // after a good password: profile first (once), then the chat
+  let needsProfile = false;
+  try { needsProfile = await loadFamily(); }
+  catch (e) { if (e.message === 'auth') throw e; showBanner(e.message); }   // e.g. profiles not set up yet: carry on with the chat
+  if (needsProfile) { showProfile(); return; }
+  await loadHistory();
+}
+const profileBody = (relation, pre) => JSON.stringify({
+  visitor_id: visitorId, relation, name: $(pre + '-name').value, dob: $(pre + '-dob').value, sex: $(pre + '-sex').value,
+  conditions: $(pre + '-conditions').value, medicines: $(pre + '-medicines').value, allergies: $(pre + '-allergies').value,
+});
+$('profile-form').addEventListener('submit', async (e) => {
+  e.preventDefault(); $('profile-error').textContent = '';
+  try { await api('/members', { method: 'POST', body: profileBody('self', 'p') }); await loadFamily(); await loadHistory(); }
+  catch (err) { if (err.message !== 'auth') $('profile-error').textContent = err.message; }
+});
+const closeDrawer = () => { shell.dataset.drawer = 'closed'; };
+const closeModal = () => modal.classList.remove('open');
+$('menu-btn').addEventListener('click', () => { shell.dataset.drawer = shell.dataset.drawer === 'open' ? 'closed' : 'open'; });
+$('backdrop').addEventListener('click', closeDrawer);
+$('add-member-btn').addEventListener('click', () => { $('m-form').reset(); $('m-error').textContent = ''; closeDrawer(); modal.classList.add('open'); $('m-relation').focus(); });
+$('m-cancel').addEventListener('click', closeModal);
+modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeModal(); closeDrawer(); } });
+$('m-form').addEventListener('submit', async (e) => {
+  e.preventDefault(); $('m-error').textContent = '';
+  try { await api('/members', { method: 'POST', body: profileBody($('m-relation').value, 'm') }); await loadFamily(); closeModal(); }
+  catch (err) { if (err.message !== 'auth') $('m-error').textContent = err.message; }
+});
+
 $('gate-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const tried = $('gate-input').value.trim(); if (!tried) return;
   password = tried;
-  try { await loadHistory(); store.set('fl_password', password); }
+  try { await enter(); store.set('fl_password', password); }
   catch (err) { if (err.message !== 'auth') showGate(err.message); }
 });
 
 (async () => {
   if (!password) return showGate();
-  try { await loadHistory(); } catch (err) { if (err.message !== 'auth') { showChat(); showBanner(err.message); } }
+  try { await enter(); } catch (err) { if (err.message !== 'auth') { showChat(); showBanner(err.message); } }
 })();
 </script>
 </body>
