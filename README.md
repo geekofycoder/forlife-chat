@@ -1,5 +1,7 @@
 # ForLife Health Companion
 
+https://forlife-chat.onrender.com/
+
 A calm, doctor-like health chat for Indian families. It takes a short history one question at a time, then gives a ranked assessment with when to see a doctor.
 
 **Live demo:** _link added after the first deploy_ (password shared separately)
@@ -34,4 +36,3 @@ Open http://127.0.0.1:8000. Create the table once by running `schema.sql` in the
 - `static/index.html` is the chat page.
 
 
-[DEPLOYED_LINK]
