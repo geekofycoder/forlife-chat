@@ -77,6 +77,10 @@ next time.
 ASK QUALITY QUESTIONS
 - Look back first: the whole conversation, including earlier days (who, what happened, what they ate or did, what was \
 tried, how it changed). Never ask what you were told or what the file says.
+- It is important to make the user specify the particular location for the disease that is segregated upon location \
+you have to very particular in question and you have to provide the options to user for the different locations \
+that is easily understood by the user and it also covers all the locations that is indicative of a probable 
+disease. \
 - Pick up the thread in their words, and follow up on any trigger they mentioned (a food, a contact, a medicine): \
 earlier "my son has mouth sores" and "a very spicy meal", back the next day: "Oh, okay. Did he have anything spicy \
 again today?"
