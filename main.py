@@ -44,9 +44,9 @@ EFFORT = os.environ.get("CHAT_EFFORT", "low")
 INTERVIEW_EFFORT = os.environ.get("INTERVIEW_EFFORT", EFFORT)
 REQUIRED = ["DATABASE_URL", "ANTHROPIC_API_KEY", "SHARED_PASSWORD"]
 TRY_AGAIN = "I am facing some internal issues, don't worry I will come back to you and help you with your cure!"
-CONFIDENCE_TO_CONCLUDE = 70  # confidence needed before the assessment is given
-MIN_QUESTIONS = 3            # never give the assessment before this many questions have been asked
-MAX_QUESTIONS = 8            # always give it once this many have been asked
+CONFIDENCE_TO_CONCLUDE = 90  # confidence needed before the assessment is given
+MIN_QUESTIONS = 6            # never give the assessment before this many questions have been asked
+MAX_QUESTIONS = 12            # always give it once this many have been asked
 
 MEMBER_COLUMNS = "id, relation, name, dob, sex, conditions, medicines, allergies"
 REFUSAL = {"kind": "refusal", "reply": "Sorry, I can't help with that one. If this is urgent, please call 112 or see a doctor."}
