@@ -4,7 +4,10 @@ A consultation has two steps, each with its own prompt:
   INTERVIEW_PROMPT   takes the history one question at a time (used on every turn)
   CONCLUSION_PROMPT  gives the final assessment (used once, when the server decides you are confident enough)
 Both are followed, on every call, by the family file and the group rules (built in family.py).
+The kinds of doctor the assessment can point to, with their plain-words descriptions, are in doctors.py.
 """
+
+from doctors import DOCTORS
 
 PERSONA = """\
 You are the ForLife health companion: you talk with Indian families about everyday health worries as a good, \
@@ -118,7 +121,7 @@ Patient: "My son has sores in his mouth since yesterday."  You: "Oh no, poor guy
 (next day) Patient: "He's a bit better."  You: "Oh good, that's a relief. Did he have anything spicy again today?"
 """
 
-CONCLUSION_PROMPT = PERSONA + """
+CONCLUSION_PROMPT = PERSONA + f"""
 YOUR JOB RIGHT NOW
 The history is complete enough. Give your assessment as the doctor wrapping up, for the patient named below (if none, \
 the person the latest complaint is about). Ask no questions.
@@ -145,8 +148,15 @@ why uncommon but worth ruling out.
 do_now (0 to 4 steps, max 12 words each): safe self-care that clearly fits (fluids, rest, light food); no doses; for a \
 baby or child no amounts (say "small sips, often" and that the doctor or pharmacist will say how much); empty if \
 nothing clearly fits.
-see_a_doctor_if (3 to 5 items, a specific sign and a time, e.g. "Blood in the stool: same day"): covers the warning \
-signs of every moderate or immediate condition.
+doctor: the ONE kind of doctor to suggest for this patient, chosen for the most likely condition and for THIS patient. \
+It only names who to see; when to go is already in the headline.
+- specialty: exactly one of: {", ".join(DOCTORS)}. A child: usually paediatrician, unless the problem clearly belongs \
+to another doctor (a toothache: dentist). Not sure which specialist fits: general_physician, who can refer onward.
+- why (max 30 words): the reason, said the way a calm, friendly family doctor would, in everyday words: what they \
+told you, and that this is the doctor who looks after exactly that ("Since his mouth sores are making it hard to \
+drink, a children's doctor can check how well he is keeping up with fluids."). No fear words, no certainty ("it \
+looks like"), never a symptom they didn't report. The page already shows what this kind of doctor does, so don't \
+explain the job.
 
 RISK (medical_risk is for THIS patient, not the condition in general)
 - low: usually settles at home; watching the warning signs is enough.
@@ -160,8 +170,7 @@ Check medicines and allergies for every condition: blood thinners, steroids or o
 diabetes, heart, kidney, liver or lung medicines can make a condition more serious; an allergy, condition or medicine \
 on file can rule out a remedy. Never name an over-the-counter medicine that clashes with the file; mention a medicine on \
 file when it matters ("he takes amlodipine, which can cause dizziness").
-If any condition is moderate or immediate, the headline and the first see_a_doctor_if item must say to see a doctor \
-and when.
+If any condition is moderate or immediate, the headline must say to see a doctor and when.
 """
 
 _RISK = {"type": "string", "enum": ["low", "moderate", "immediate"]}
@@ -208,8 +217,13 @@ CONCLUSION_SCHEMA = {
             },
         },
         "do_now": {"type": "array", "items": {"type": "string"}},
-        "see_a_doctor_if": {"type": "array", "items": {"type": "string"}},
+        "doctor": {
+            "type": "object",
+            "properties": {"specialty": {"type": "string", "enum": list(DOCTORS)}, "why": {"type": "string"}},
+            "required": ["specialty", "why"],
+            "additionalProperties": False,
+        },
     },
-    "required": ["headline", "conditions", "do_now", "see_a_doctor_if"],
+    "required": ["headline", "conditions", "do_now", "doctor"],
     "additionalProperties": False,
 }

@@ -28,6 +28,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+import doctors
 import family
 from prompts import CONCLUSION_PROMPT, CONCLUSION_SCHEMA, GROUP_RULES, GROUP_TITLES, INTERVIEW_PROMPT, INTERVIEW_SCHEMA
 
@@ -383,6 +384,10 @@ async def chat(body: ChatIn):
                 content = REFUSAL
             else:
                 cc.pop("_seconds")
+                pick = cc.get("doctor")
+                cc["doctor"] = doctors.card(pick)  # name and plain-words description come from doctors.py
+                if not cc["doctor"]:
+                    log.warning("doctor pick is not on the list, card dropped: %r", pick)
                 extra = {}
                 if member:
                     raised = family.apply_floor(cc["conditions"], a["group"])  # backstop, not clinically reviewed
