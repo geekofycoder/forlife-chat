@@ -30,7 +30,7 @@ from pydantic import BaseModel, Field
 
 import doctors
 import family
-from prompts import CONCLUSION_PROMPT, CONCLUSION_SCHEMA, GROUP_RULES, GROUP_TITLES, INTERVIEW_PROMPT, INTERVIEW_SCHEMA
+from prompts import CONCLUSION_PROMPT, CONCLUSION_SCHEMA, EMERGENCY_NOTE, GROUP_RULES, GROUP_TITLES, INTERVIEW_PROMPT, INTERVIEW_SCHEMA
 
 log = logging.getLogger("forlife")
 log.setLevel(logging.INFO)
@@ -172,7 +172,8 @@ def spoken(raw: str) -> str:
     if kind_of(d) == "conclusion":
         names = ", ".join(c.get("name", "") for c in d.get("conditions", []) if isinstance(c, dict))
         who = f" for {d['patient_label']}" if d.get("patient_label") else ""
-        return f"{d.get('headline', '')} (I showed my assessment{who}: {names}.)".strip()
+        lead = f"{d['reply']} " if d.get("reply") else ""  # an emergency assessment starts with the emergency message
+        return f"{lead}{d.get('headline', '')} (I showed my assessment{who}: {names}.)".strip()
     return d.get("reply") or d.get("headline") or d.get("message") or "..."  # last two: chats saved in earlier formats
 
 
@@ -240,6 +241,43 @@ async def ask_claude(system: str, messages: list, schema: dict, effort: str, max
         raise HTTPException(502, TRY_AGAIN)
     data["_seconds"] = round(time.time() - t0, 1)
     return data
+
+
+async def write_assessment(members, file_text, blocks, messages, iv, today, emergency=False):
+    """The full assessment, as it is stored and shown. Returns None if Claude declined.
+    In an emergency the emergency message stays on top and every condition is immediate."""
+    member = family.match_patient(members, iv["patient"])
+    if member:
+        a = family.describe(member["dob"], today)
+        floor = family.FLOORS.get(a["group"])
+        who = f"PATIENT FOR THIS ASSESSMENT: {member['name']}, {a['text']} ({a['label']})." + (
+            f" Group floor: every condition at least {floor}." if floor else ""
+        )
+    else:
+        who = "PATIENT FOR THIS ASSESSMENT: not identified; use the person the latest complaint is about."
+    parts = [CONCLUSION_PROMPT, file_text, blocks, who] + ([EMERGENCY_NOTE] if emergency else [])
+    cc = await ask_claude("\n\n".join(p for p in parts if p), messages, CONCLUSION_SCHEMA, EFFORT, 8000, conclusion_ok)
+    log.info("assessment written in %ss%s", cc["_seconds"] if cc else "-", " (emergency)" if emergency else "")
+    if cc is None:
+        return None
+    cc.pop("_seconds")
+    pick = cc.get("doctor")
+    cc["doctor"] = doctors.card(pick)  # name and plain-words description come from doctors.py
+    if not cc["doctor"]:
+        log.warning("doctor pick is not on the list, card dropped: %r", pick)
+    extra = {}
+    if member:
+        raised = family.apply_floor(cc["conditions"], a["group"])  # backstop, not clinically reviewed
+        if raised:
+            log.info("risk floor applied (%s): %s", a["group"], "; ".join(raised))
+        first = member["name"].split()[0]
+        extra = {"patient": first, "patient_label": f"{first} · {a['text']} ({a['label']})"}
+    if emergency:
+        raised = family.raise_risk(cc["conditions"], "immediate")  # the prompt asks for this; the code makes sure
+        if raised:
+            log.info("emergency: risk raised to immediate: %s", "; ".join(raised))
+        extra |= {"emergency": True, "reply": iv["reply"]}
+    return {"kind": "conclusion", **cc, **extra, "confidence": iv["confidence"]}
 
 
 def interview_ok(d: dict) -> bool:
@@ -368,36 +406,14 @@ async def chat(body: ChatIn):
             asked_before + 1, iv["patient"] or "?", iv["confidence"], CONFIDENCE_TO_CONCLUDE, action, reason, iv["_seconds"],
         )
         if action == "conclude":
-            member = family.match_patient(members, iv["patient"])
-            if member:
-                a = family.describe(member["dob"], today)
-                floor = family.FLOORS.get(a["group"])
-                who = f"PATIENT FOR THIS ASSESSMENT: {member['name']}, {a['text']} ({a['label']})." + (
-                    f" Group floor: every condition at least {floor}." if floor else ""
-                )
-            else:
-                who = "PATIENT FOR THIS ASSESSMENT: not identified; use the person the latest complaint is about."
-            system = "\n\n".join(part for part in (CONCLUSION_PROMPT, file_text, blocks, who) if part)
-            cc = await ask_claude(system, messages, CONCLUSION_SCHEMA, EFFORT, 8000, conclusion_ok)
-            log.info("assessment written in %ss", cc["_seconds"] if cc else "-")
-            if cc is None:
-                content = REFUSAL
-            else:
-                cc.pop("_seconds")
-                pick = cc.get("doctor")
-                cc["doctor"] = doctors.card(pick)  # name and plain-words description come from doctors.py
-                if not cc["doctor"]:
-                    log.warning("doctor pick is not on the list, card dropped: %r", pick)
-                extra = {}
-                if member:
-                    raised = family.apply_floor(cc["conditions"], a["group"])  # backstop, not clinically reviewed
-                    if raised:
-                        log.info("risk floor applied (%s): %s", a["group"], "; ".join(raised))
-                    first = member["name"].split()[0]
-                    extra = {"patient": first, "patient_label": f"{first} · {a['text']} ({a['label']})"}
-                content = {"kind": "conclusion", **cc, **extra, "confidence": iv["confidence"]}
+            content = await write_assessment(members, file_text, blocks, messages, iv, today) or REFUSAL
         elif action == "emergency":
             content = {"kind": "emergency", "reply": iv["reply"], "confidence": iv["confidence"], "patient": iv["patient"]}
+            if stage == "interviewing":  # one assessment per case: a repeat emergency shows just the emergency message
+                try:
+                    content = await write_assessment(members, file_text, blocks, messages, iv, today, emergency=True) or content
+                except HTTPException:  # never lose the emergency message because the assessment failed
+                    log.warning("emergency assessment failed; sending the emergency message on its own")
         else:
             content = {
                 "kind": "interview", "reply": iv["reply"], "confidence": iv["confidence"], "patient": iv["patient"],

@@ -431,22 +431,25 @@ function renderAssistant(content) {
   const text = [d.reply, d.headline, d.message].find((t) => typeof t === 'string') || '';
   const emergency = d.kind === 'emergency' || d.emergency === true;
   const conditions = list(d.conditions), doNow = list(d.do_now);
+  const assessed = conditions.length > 0;   // an emergency can come with the full assessment (red box first, then the cards)
+  const forwho = d.patient_label ? `<div class="forwho">For ${esc(String(d.patient_label))}</div>` : '';
   let html = emergency
-    ? `<div class="bubble urgent"><div class="urgent-label">Please get help now</div><p>${inline(text)}</p>${doNow.length ? ol(doNow) : ''}</div>`
-    : `<div class="bubble">${d.patient_label ? `<div class="forwho">For ${esc(String(d.patient_label))}</div>` : ''}${inline(text)}</div>`;
-  if (conditions.length) {
+    ? `<div class="bubble urgent"><div class="urgent-label">Please get help now</div><p>${inline(text)}</p>${doNow.length && !assessed ? ol(doNow) : ''}</div>`
+    : `<div class="bubble">${forwho}${inline(text)}</div>`;
+  if (emergency && assessed && d.reply && typeof d.headline === 'string') html += `<div class="bubble">${forwho}${inline(d.headline)}</div>`;
+  if (assessed) {
     html += `<section class="assess" aria-label="What this could be">${conditions.map(conditionCard).join('')}
       <p class="legend">Tap a card to open or close it. Medical risk shows how serious a condition can be for this patient if it is the cause, not how likely it is.</p></section>`;
   }
-  if (!emergency && doNow.length) html += `<aside class="dosome"><div class="box-title">What you can do now</div>${ol(doNow)}</aside>`;
+  if (doNow.length && (assessed || !emergency)) html += `<aside class="dosome"><div class="box-title">What you can do now</div>${ol(doNow)}</aside>`;
   const doc = d.doctor && typeof d.doctor === 'object' ? d.doctor : null;   // chats saved before this card existed have none
-  if (!emergency && conditions.length && doc && doc.name) {
+  if (assessed && doc && doc.name) {
     html += `<aside class="doctor" aria-label="Which doctor to see"><div class="box-title">Who to see</div>
       <h4>${esc(String(doc.name))}</h4>
       ${doc.about ? `<p class="about">${esc(String(doc.about))}</p>` : ''}
       ${doc.why ? `<p class="why">${inline(String(doc.why))}</p>` : ''}</aside>`;
   }
-  if (conditions.length) html += SOON;   // after an assessment only
+  if (assessed) html += SOON;   // after an assessment only
   const older = d.kind ? [] : list(d.questions || (d.question ? [d.question] : []));   // chats saved in the old question-list format
   if (older.length) html += `<div class="bubble">${ol(older)}</div>`;
   return html;

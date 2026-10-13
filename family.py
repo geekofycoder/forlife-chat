@@ -154,14 +154,17 @@ def match_patient(members, name: str):
     return max(found, key=lambda m: m["dob"]) if found else None
 
 
-def apply_floor(conditions: list, group: str) -> list:
-    """Raise any condition's risk to the group's floor. Returns what was raised, for the log."""
-    floor = FLOORS.get(group)
+def raise_risk(conditions: list, floor: str) -> list:
+    """Raise any condition's risk to at least `floor`. Returns what was raised, for the log."""
     raised = []
-    if not floor:
-        return raised
     for c in conditions:
         if RISK_ORDER.get(c.get("medical_risk"), 0) < RISK_ORDER[floor]:
             raised.append(f"{c.get('name')}: {c.get('medical_risk')} -> {floor}")
             c["medical_risk"] = floor
     return raised
+
+
+def apply_floor(conditions: list, group: str) -> list:
+    """Raise any condition's risk to the group's floor (none for most groups)."""
+    floor = FLOORS.get(group)
+    return raise_risk(conditions, floor) if floor else []

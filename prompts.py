@@ -2,7 +2,8 @@
 
 A consultation has two steps, each with its own prompt:
   INTERVIEW_PROMPT   takes the history one question at a time (used on every turn)
-  CONCLUSION_PROMPT  gives the final assessment (used once, when the server decides you are confident enough)
+  CONCLUSION_PROMPT  gives the final assessment (used once, when the server decides you are confident enough,
+                     or straight away in an emergency, with EMERGENCY_NOTE added)
 Both are followed, on every call, by the family file and the group rules (built in family.py).
 The kinds of doctor the assessment can point to, with their plain-words descriptions, are in doctors.py.
 """
@@ -171,6 +172,21 @@ diabetes, heart, kidney, liver or lung medicines can make a condition more serio
 on file can rule out a remedy. Never name an over-the-counter medicine that clashes with the file; mention a medicine on \
 file when it matters ("he takes amlodipine, which can cause dizziness").
 If any condition is moderate or immediate, the headline must say to see a doctor and when.
+"""
+
+# Added to the conclusion call when the interview finds an emergency, so the assessment still comes out in the same format.
+EMERGENCY_NOTE = """\
+EMERGENCY: what the patient just wrote needs emergency care now, and they are already being told to call 112. The \
+history may be short: write the assessment from what was said so far, in the same format.
+- Every condition is medical_risk immediate.
+- conditions: what the emergency team will want to rule out first, likeliest first, including the serious causes that \
+fit what was said. Never add a symptom they didn't report.
+- headline (max 25 words): what this may be, calm and direct. Don't repeat the call-112 instruction; the page already \
+shows it.
+- do_now (2 to 4 steps): only safe steps while help comes: stay with them, keep them calm and still, no food, drink or \
+medicine unless the emergency service says so, note when it started, keep the medicine list and reports ready. No \
+remedies.
+- doctor: the kind of doctor who will look after this once the emergency team has seen them.
 """
 
 _RISK = {"type": "string", "enum": ["low", "moderate", "immediate"]}
