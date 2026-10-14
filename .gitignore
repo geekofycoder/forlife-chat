@@ -6,3 +6,5 @@ __pycache__/
 .claude/
 .mcp.json
 skills-lock.json
+session_id.txt
+*.pdf

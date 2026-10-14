@@ -1,4 +1,5 @@
-"""Family profiles: who is in the family, each person's age group, and the 'family file' text Claude reads."""
+"""Family profiles: who is in the family, each person's age group, their own doctors, and the 'family file' text Claude reads."""
+import json
 import re
 from datetime import date
 
@@ -113,12 +114,65 @@ def clean_member(m, today: date) -> dict:
     }
 
 
+DOCTOR_ROLES = ("family", "paediatrician", "gynaecologist")
+ROLE_WORDS = {"family": "family doctor", "paediatrician": "paediatrician", "gynaecologist": "gynaecologist"}
+
+
+def doctor_roles(dob: date, sex: str, today: date) -> tuple:
+    """Which of their own doctors we ask about: everyone a family doctor, under 18 a paediatrician, women 18+ a gynaecologist."""
+    years = age_parts(dob, today)[2]
+    return ("family",) + (("paediatrician",) if years < 18 else ()) + (("gynaecologist",) if sex == "female" and years >= 18 else ())
+
+
+def clean_phone(text) -> str:
+    """An Indian number as +91 and 10 digits: a mobile, or a landline with its area code. Empty is fine."""
+    raw = clean_text(text)
+    if not raw:
+        return ""
+    if not re.fullmatch(r"\+?[\d\s\-()]{6,20}", raw):
+        raise ValueError("Please check the doctor's phone number.")
+    digits = re.sub(r"\D", "", raw)
+    if len(digits) == 12 and digits.startswith("91"):
+        digits = digits[2:]
+    elif len(digits) == 11 and digits.startswith("0"):
+        digits = digits[1:]
+    if len(digits) != 10:
+        raise ValueError("Please enter the doctor's 10-digit number (for a landline, include the area code).")
+    return "+91" + digits
+
+
+def clean_doctors(items, dob: date, sex: str, today: date) -> list:
+    """Validate the doctors sent with a profile. Raises ValueError with a message that is safe to show."""
+    allowed, out = doctor_roles(dob, sex, today), {}
+    for d in items or []:
+        if d.role not in allowed:
+            raise ValueError(f"A {ROLE_WORDS.get(d.role, 'doctor')} can't be added for this person.")
+        if d.role in out:
+            raise ValueError("Please add each doctor once.")
+        name = clean_text(d.name)
+        if not 1 <= len(name) <= 80:
+            raise ValueError(f"Please enter the {ROLE_WORDS[d.role]}'s name (up to 80 characters).")
+        out[d.role] = {"role": d.role, "name": name, "phone": clean_phone(d.phone), "address": clean_text(d.address)[:200]}
+    return list(out.values())
+
+
+def member_doctors(m) -> list:
+    """The member's own doctors, from the 'doctors' column the member queries add (a JSON list)."""
+    raw = m["doctors"] if "doctors" in m.keys() else None
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except ValueError:
+            raw = None
+    return [d for d in raw or [] if isinstance(d, dict) and d.get("role") in DOCTOR_ROLES]
+
+
 def public_member(m, today: date) -> dict:
     a = describe(m["dob"], today)
     return {
         "id": str(m["id"]), "relation": m["relation"], "name": m["name"], "dob": m["dob"].isoformat(), "sex": m["sex"],
         "conditions": m["conditions"], "medicines": m["medicines"], "allergies": m["allergies"],
-        "age_text": a["text"], "label": a["label"],
+        "doctors": member_doctors(m), "age_text": a["text"], "label": a["label"],
     }
 
 
@@ -132,7 +186,8 @@ def family_file(members, today: date) -> str:
             f"- {m['name']}: {RELATION_PHRASE[m['relation']]}. {m['sex'].capitalize()}, {a['text']} ({a['label']}). "
             f"Conditions: {m['conditions'] or 'none recorded'}. Medicines: {m['medicines'] or 'none recorded'}. "
             f"Allergies: {m['allergies'] or 'none recorded'}."
-        )
+            + (f" Own doctors: {', '.join(ROLE_WORDS[d['role']] for d in own)}." if (own := member_doctors(m)) else "")
+        )  # only which kinds of doctor they have: their names and numbers never go to Claude
     return "\n".join(lines)
 
 

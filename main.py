@@ -49,6 +49,13 @@ MIN_QUESTIONS = 6            # never give the assessment before this many questi
 MAX_QUESTIONS = 12            # always give it once this many have been asked
 
 MEMBER_COLUMNS = "id, relation, name, dob, sex, conditions, medicines, allergies"
+# Each member's own doctors as a JSON list, added to every member query ({m} is the members alias)
+DOCTORS_JSON = (
+    "coalesce((select jsonb_agg(jsonb_build_object('role', d.role, 'name', d.name, 'phone', d.phone, 'address', d.address) "
+    "order by d.role) from member_doctors d where d.member_id = {m}.id), '[]'::jsonb)::text"
+)
+MEMBER_SELECT = f"select {', '.join('m.' + c for c in MEMBER_COLUMNS.split(', '))}, {DOCTORS_JSON.format(m='m')} as doctors from members m"
+MEMBERS_QUERY = f"{MEMBER_SELECT} where m.visitor_id = $1 order by m.created_at"
 REFUSAL = {"kind": "refusal", "reply": "Sorry, I can't help with that one. If this is urgent, please call 112 or see a doctor."}
 HIDDEN = ("confidence", "reopened", "state", "patient")  # kept in the database for the server, never sent to the browser
 
@@ -110,7 +117,7 @@ async def db_run(method: str, *args):
 async def load_members(visitor_id):
     """This visitor's family profiles. If the table has not been created yet, carry on without a family file."""
     try:
-        return await db_run("fetch", f"select {MEMBER_COLUMNS} from members where visitor_id = $1 order by created_at", visitor_id)
+        return await db_run("fetch", MEMBERS_QUERY, visitor_id)
     except asyncpg.UndefinedTableError:
         log.warning("The members table does not exist yet: run schema.sql in the Supabase SQL editor. Continuing without a family file.")
         return []
@@ -265,6 +272,8 @@ async def write_assessment(members, file_text, blocks, messages, iv, today, emer
     cc["doctor"] = doctors.card(pick)  # name and plain-words description come from doctors.py
     if not cc["doctor"]:
         log.warning("doctor pick is not on the list, card dropped: %r", pick)
+    # their own family doctor / paediatrician / gynaecologist, from their profile (never from Claude)
+    cc["doctor"] = doctors.with_own(cc["doctor"], member, family.member_doctors(member) if member else [], emergency)
     extra = {}
     if member:
         raised = family.apply_floor(cc["conditions"], a["group"])  # backstop, not clinically reviewed
@@ -300,6 +309,13 @@ class ChatIn(BaseModel):
     text: str = Field(max_length=4000)
 
 
+class DoctorIn(BaseModel):
+    role: str = Field(max_length=20)  # family, paediatrician or gynaecologist
+    name: str = Field(default="", max_length=200)
+    phone: str = Field(default="", max_length=40)
+    address: str = Field(default="", max_length=400)
+
+
 class MemberIn(BaseModel):
     visitor_id: uuid.UUID
     relation: str
@@ -309,12 +325,22 @@ class MemberIn(BaseModel):
     conditions: str = Field(default="", max_length=2000)
     medicines: str = Field(default="", max_length=2000)
     allergies: str = Field(default="", max_length=2000)
+    doctors: list[DoctorIn] = Field(default=[], max_length=3)
+
+
+class EditIn(BaseModel):
+    """What can be changed on a saved profile: health details and their own doctors (not name, age or relation)."""
+    visitor_id: uuid.UUID
+    conditions: str = Field(default="", max_length=2000)
+    medicines: str = Field(default="", max_length=2000)
+    allergies: str = Field(default="", max_length=2000)
+    doctors: list[DoctorIn] = Field(default=[], max_length=3)
 
 
 @app.get("/family", dependencies=[Depends(check_password)])
 async def get_family(visitor_id: uuid.UUID):
     try:
-        rows = await db_run("fetch", f"select {MEMBER_COLUMNS} from members where visitor_id = $1 order by created_at", visitor_id)
+        rows = await db_run("fetch", MEMBERS_QUERY, visitor_id)
     except asyncpg.UndefinedTableError:
         raise HTTPException(503, "Family profiles are not set up yet. Please tell whoever runs this app.")
     today = datetime.now(IST).date()
@@ -327,10 +353,12 @@ async def add_member(body: MemberIn):
     today = datetime.now(IST).date()
     try:
         m = family.clean_member(body, today)
+        own = family.clean_doctors(body.doctors, m["dob"], m["sex"], today)
     except ValueError as e:
         raise HTTPException(422, str(e))
-    # One database trip: add the person unless the same person (relation, name, date of birth, gender) is already there,
-    # in which case that profile is returned, so a double click or a retry can't create a duplicate. The cap is checked here too.
+    # One database trip: add the person (and their own doctors) unless the same person (relation, name, date of birth,
+    # gender) is already there, in which case that profile is returned unchanged, so a double click or a retry can't
+    # create a duplicate. The cap is checked here too.
     try:
         row = await app.state.db.fetchrow(
             f"with same as (select {MEMBER_COLUMNS} from members where visitor_id = $1::uuid and relation = $2::text "
@@ -338,9 +366,15 @@ async def add_member(body: MemberIn):
             f"added as (insert into members (visitor_id, relation, name, dob, sex, conditions, medicines, allergies) "
             f"select $1::uuid, $2::text, $3::text, $4::date, $5::text, $6::text, $7::text, $8::text "
             f"where not exists (select 1 from same) and (select count(*) from members where visitor_id = $1::uuid) < {family.MAX_MEMBERS} "
-            f"returning {MEMBER_COLUMNS}) "
-            f"select * from added union all select * from same",
+            f"returning {MEMBER_COLUMNS}), "
+            f"m as (select * from added union all select * from same), "
+            f"docs as (insert into member_doctors (visitor_id, member_id, role, name, phone, address) "
+            f"select $1::uuid, a.id, d.role, d.name, d.phone, d.address from added a, "
+            f"jsonb_to_recordset($9::jsonb) as d(role text, name text, phone text, address text) returning role, name, phone, address) "
+            f"select m.*, coalesce((select jsonb_agg(jsonb_build_object('role', x.role, 'name', x.name, 'phone', x.phone, "
+            f"'address', x.address) order by x.role) from docs x)::text, {DOCTORS_JSON.format(m='m')}) as doctors from m",
             body.visitor_id, m["relation"], m["name"], m["dob"], m["sex"], m["conditions"], m["medicines"], m["allergies"],
+            json.dumps(own),
         )
     except asyncpg.UniqueViolationError as e:
         if e.constraint_name == "members_one_self_per_visitor":
@@ -348,13 +382,43 @@ async def add_member(body: MemberIn):
         # members_no_duplicate_people: another request saved this same person a moment ago (two tabs at the same instant)
         row = await db_run(
             "fetchrow",
-            f"select {MEMBER_COLUMNS} from members where visitor_id = $1 and relation = $2 and lower(name) = lower($3) and dob = $4 and sex = $5",
+            f"{MEMBER_SELECT} where m.visitor_id = $1 and m.relation = $2 and lower(m.name) = lower($3) and m.dob = $4 and m.sex = $5",
             body.visitor_id, m["relation"], m["name"], m["dob"], m["sex"],
         )
         if row is None:
             raise HTTPException(409, "That person is already added.")
     if row is None:
         raise HTTPException(409, f"You can add up to {family.MAX_MEMBERS} people.")
+    return family.public_member(row, today)
+
+
+@app.put("/members/{member_id}", dependencies=[Depends(check_password)])
+async def edit_member(member_id: uuid.UUID, body: EditIn):
+    today = datetime.now(IST).date()
+    who = await db_run("fetchrow", "select dob, sex from members where id = $1 and visitor_id = $2", member_id, body.visitor_id)
+    if who is None:
+        raise HTTPException(404, "That person isn't in your family list.")
+    try:
+        own = family.clean_doctors(body.doctors, who["dob"], who["sex"], today)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    # One statement: update the health details, drop the doctors they removed, add or update the rest.
+    row = await app.state.db.fetchrow(
+        f"with m as (update members set conditions = $3::text, medicines = $4::text, allergies = $5::text "
+        f"where id = $1::uuid and visitor_id = $2::uuid returning {MEMBER_COLUMNS}), "
+        f"gone as (delete from member_doctors where member_id = $1::uuid and visitor_id = $2::uuid and not (role = any($6::text[]))), "
+        f"up as (insert into member_doctors (visitor_id, member_id, role, name, phone, address) "
+        f"select $2::uuid, m.id, d.role, d.name, d.phone, d.address from m, "
+        f"jsonb_to_recordset($7::jsonb) as d(role text, name text, phone text, address text) "
+        f"on conflict (member_id, role) do update set name = excluded.name, phone = excluded.phone, address = excluded.address, "
+        f"updated_at = now() returning role, name, phone, address) "
+        f"select m.*, coalesce((select jsonb_agg(jsonb_build_object('role', u.role, 'name', u.name, 'phone', u.phone, "
+        f"'address', u.address) order by u.role) from up u), '[]'::jsonb)::text as doctors from m",
+        member_id, body.visitor_id, family.clean_text(body.conditions)[:500], family.clean_text(body.medicines)[:500],
+        family.clean_text(body.allergies)[:500], [d["role"] for d in own], json.dumps(own),
+    )
+    if row is None:
+        raise HTTPException(404, "That person isn't in your family list.")
     return family.public_member(row, today)
 
 

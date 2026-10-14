@@ -35,3 +35,21 @@ create unique index members_one_self_per_visitor on public.members (visitor_id) 
 create unique index members_no_duplicate_people on public.members (visitor_id, relation, lower(name), dob, sex);  -- same person can't be added twice, even by two requests at once
 
 alter table public.members enable row level security;
+
+-- Each family member's own doctors: their family doctor, a child's paediatrician, a woman's gynaecologist.
+-- One doctor per role per person. Kept separate from members so a later "nearby doctors" feature can add pincode
+-- and directory links here without touching members.
+create table public.member_doctors (
+  id          uuid        primary key default gen_random_uuid(),
+  visitor_id  uuid        not null,
+  member_id   uuid        not null references public.members(id) on delete cascade,
+  role        text        not null check (role in ('family', 'paediatrician', 'gynaecologist')),
+  name        text        not null check (char_length(name) between 1 and 80),
+  phone       text        not null default '' check (char_length(phone) <= 16),
+  address     text        not null default '' check (char_length(address) <= 200),
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+create unique index member_doctors_one_per_role on public.member_doctors (member_id, role);
+create index member_doctors_visitor_idx on public.member_doctors (visitor_id);
+alter table public.member_doctors enable row level security;

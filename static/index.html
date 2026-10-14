@@ -114,9 +114,21 @@
   .dosome ol { margin: 0; padding-left: 1.25em; } .dosome li { margin: .25em 0; }
   .doctor { padding: 13px 16px; border-radius: var(--radius-card); background: var(--surface-0); border: 1px solid var(--line); border-left: 4px solid var(--green-500); box-shadow: var(--shadow-1); font-size: 15.5px; }
   .doctor .box-title { margin-bottom: 4px; color: var(--green-700); }
-  .doctor h4 { margin: 0 0 4px; font: 600 19px/1.25 var(--font-display); color: var(--ink-900); letter-spacing: -.005em; }
-  .doctor .about { margin: 0; font-size: 14.5px; color: var(--ink-500); }
+  .doctor h4 { margin: 0; font: 600 19px/1.25 var(--font-display); color: var(--ink-900); letter-spacing: -.005em; }
+  .doctor .start { margin-bottom: 2px; font-size: 13px; color: var(--ink-500); }
+  .doc-name { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+  .info-btn { flex: none; display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border-radius: 50%; border: 1.5px solid var(--green-500); background: transparent; color: var(--green-700); font: italic 700 14px/1 Georgia, serif; cursor: pointer; }
+  .info-btn[aria-expanded="true"] { background: var(--green-700); border-color: var(--green-700); color: var(--cream); }
+  .doctor .about { margin: 6px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--green-100); font-size: 14.5px; color: var(--ink-700); }
   .doctor .why { margin: 9px 0 0; padding-top: 9px; border-top: 1px solid var(--line); color: var(--ink-700); }
+  .doctor .next { margin-top: 12px; padding-top: 10px; border-top: 1px dashed #cfd5d2; font-size: 14.5px; color: var(--ink-500); }
+  .doctor .next strong { font-weight: 700; color: var(--ink-900); }
+  .doctor .next .when { margin: 4px 0 0; }
+  .doctor .role { font-size: 14.5px; color: var(--ink-500); }
+  .doctor .about p { margin: 0; }
+  .doctor .about .tel { display: inline-block; margin-bottom: 4px; font-weight: 600; color: var(--green-700); text-decoration: none; }
+  .doctor .about .tel:hover { text-decoration: underline; }
+  .doctor .about .addr { margin-bottom: 6px; color: var(--ink-700); }
   .soon { padding: 14px 16px 16px; border-radius: var(--radius-card); background: var(--deep); color: var(--cream); }
   .soon-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
   .soon-tag { padding: 2px 10px; border-radius: var(--radius-pill); font: 600 12px/1.5 var(--font-sans); letter-spacing: .06em; text-transform: uppercase; color: var(--deep); background: var(--mint); }
@@ -205,6 +217,13 @@
   #add-modal.open { display: flex; }
   .modal-card { width: 100%; max-width: 480px; max-height: 92dvh; overflow-y: auto; padding: 24px; background: var(--surface-0); border-radius: 20px; box-shadow: var(--shadow-2); }
   .modal-card h2 { margin: 0 0 14px; font: 600 24px/1.2 var(--font-display); color: var(--ink-900); }
+  .who-line { margin: -8px 0 14px; color: var(--ink-500); }
+  /* their own doctors, asked after date of birth and gender */
+  .docs { margin: 0 0 12px; padding: 12px 14px 2px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-1); }
+  .docs-title { margin-bottom: 10px; font-weight: 600; color: var(--green-900); }
+  .docs-title em { font-style: normal; font-weight: 400; color: var(--ink-500); }
+  .docs .field input, .docs .field select, .docs .field textarea { background: var(--surface-0); }
+  .doc-fields { margin: -2px 0 10px; padding-left: 12px; border-left: 3px solid var(--green-100); }
 
   /* chat layout: family sidebar + chat (the sidebar becomes a slide-out drawer on phones) */
   .hbrand { display: flex; align-items: center; gap: 12px; }
@@ -219,6 +238,8 @@
   .member .who { min-width: 0; line-height: 1.3; }
   .member .nm { font-weight: 600; color: var(--ink-900); overflow-wrap: anywhere; }
   .member .sub { font-size: 13.5px; color: var(--ink-500); }
+  .member .edit-btn { margin-left: auto; flex: none; padding: 6px 10px; font: 600 13px var(--font-sans); color: var(--green-700); background: transparent; border: 1px solid transparent; border-radius: var(--radius-pill); cursor: pointer; }
+  .member .edit-btn:hover { background: var(--green-100); border-color: var(--green-100); }
   #add-member-btn { width: 100%; margin-top: 10px; padding: 10px 14px; font: 600 15px var(--font-sans); color: var(--green-900); background: var(--green-100); border: 1px dashed var(--green-500); border-radius: var(--radius-pill); cursor: pointer; }
   #add-member-btn:hover { background: #d3ece4; }
   #backdrop { display: none; }
@@ -269,6 +290,7 @@
       <label class="field"><span>Gender</span>
         <select id="p-sex" required><option value="" disabled selected>Select</option><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option></select></label>
     </div>
+    <div id="p-docs" class="docs" hidden></div>
     <label class="field"><span>Long-term conditions <em>(optional)</em></span><textarea id="p-conditions" maxlength="500" placeholder="For example diabetes or asthma. Leave blank if none."></textarea></label>
     <label class="field"><span>Regular medicines <em>(optional)</em></span><textarea id="p-medicines" maxlength="500" placeholder="Leave blank if none."></textarea></label>
     <label class="field"><span>Allergies <em>(optional)</em></span><textarea id="p-allergies" maxlength="500" placeholder="Medicines, foods or anything else. Leave blank if none."></textarea></label>
@@ -318,6 +340,8 @@
 <div id="add-modal" role="dialog" aria-modal="true" aria-labelledby="add-title">
   <form class="modal-card" id="m-form" autocomplete="off">
     <h2 id="add-title">Add a family member</h2>
+    <p id="m-who" class="who-line" hidden></p>
+    <div id="m-identity">
     <label class="field"><span>Relation</span>
       <select id="m-relation" required><option value="" disabled selected>Select</option><option value="spouse">Spouse or partner</option><option value="son">Son</option><option value="daughter">Daughter</option><option value="father">Father</option><option value="mother">Mother</option><option value="brother">Brother</option><option value="sister">Sister</option><option value="grandfather">Grandfather</option><option value="grandmother">Grandmother</option><option value="other">Other</option></select></label>
     <label class="field"><span>Name</span><input id="m-name" maxlength="60" required autocomplete="off"></label>
@@ -326,12 +350,14 @@
       <label class="field"><span>Gender</span>
         <select id="m-sex" required><option value="" disabled selected>Select</option><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option></select></label>
     </div>
-    <details class="more"><summary>Health details (optional)</summary>
+    </div>
+    <div id="m-docs" class="docs" hidden></div>
+    <details class="more" id="m-more"><summary>Health details (optional)</summary>
       <label class="field"><span>Long-term conditions</span><textarea id="m-conditions" maxlength="500" placeholder="Leave blank if none."></textarea></label>
       <label class="field"><span>Regular medicines</span><textarea id="m-medicines" maxlength="500" placeholder="Leave blank if none."></textarea></label>
       <label class="field"><span>Allergies</span><textarea id="m-allergies" maxlength="500" placeholder="Leave blank if none."></textarea></label>
     </details>
-    <div class="btn-row"><button class="btn ghost" id="m-cancel" type="button">Cancel</button><button class="btn" type="submit">Add</button></div>
+    <div class="btn-row"><button class="btn ghost" id="m-cancel" type="button">Cancel</button><button class="btn" id="m-submit" type="submit">Add</button></div>
     <div id="m-error" class="ferror" role="alert"></div>
   </form>
 </div>
@@ -426,6 +452,13 @@ const SOON = `<aside class="soon" aria-label="Coming soon in version 2">
     </div>
   </aside>`;
 
+/* The (i) next to a doctor's name shows or hides what that kind of doctor does (one click handler for the whole page). */
+const infoBtn = (dr) => dr.about ? `<button type="button" class="info-btn" aria-expanded="false" aria-label="About ${esc(String(dr.name))}" title="More about this doctor">i</button>` : '';
+const aboutBox = (dr) => dr.about ? `<p class="about" hidden>${esc(String(dr.about))}</p>` : '';
+const fmtPhone = (p) => (/^\+91\d{10}$/.test(p) ? `+91 ${p.slice(3, 8)} ${p.slice(8)}` : p);
+/* Their own doctor's (i): their number (tap to call), clinic address, then what that kind of doctor is for them. */
+const ownBox = (o) => `<div class="about" hidden>${o.phone ? `<a class="tel" href="tel:${esc(String(o.phone))}">Call ${esc(fmtPhone(String(o.phone)))}</a>` : ''}${o.address ? `<div class="addr">${esc(String(o.address))}</div>` : ''}${o.about ? `<p>${esc(String(o.about))}</p>` : ''}</div>`;
+
 function renderAssistant(content) {
   const d = parseReply(content);
   const text = [d.reply, d.headline, d.message].find((t) => typeof t === 'string') || '';
@@ -444,10 +477,20 @@ function renderAssistant(content) {
   if (doNow.length && (assessed || !emergency)) html += `<aside class="dosome"><div class="box-title">What you can do now</div>${ol(doNow)}</aside>`;
   const doc = d.doctor && typeof d.doctor === 'object' ? d.doctor : null;   // chats saved before this card existed have none
   if (assessed && doc && doc.name) {
+    const nxt = doc.then && typeof doc.then === 'object' && doc.then.name ? doc.then : null;   // only with a General Physician first
+    const own = doc.own && typeof doc.own === 'object' && doc.own.name ? doc.own : null;      // their own doctor in place of ours
+    const guide = doc.guide && typeof doc.guide === 'object' && doc.guide.name ? doc.guide : null;   // a specialist first: their doctor can guide
+    const first = own
+      ? `<div class="doc-name"><h4>${esc(String(own.name))}</h4><span class="role">&middot; ${esc(String(own.label))}</span>${infoBtn(own)}</div>${ownBox(own)}`
+      : `<div class="doc-name"><h4>${esc(String(doc.name))}</h4>${infoBtn(doc)}</div>${aboutBox(doc)}`;
     html += `<aside class="doctor" aria-label="Which doctor to see"><div class="box-title">Who to see</div>
-      <h4>${esc(String(doc.name))}</h4>
-      ${doc.about ? `<p class="about">${esc(String(doc.about))}</p>` : ''}
-      ${doc.why ? `<p class="why">${inline(String(doc.why))}</p>` : ''}</aside>`;
+      <div class="doc-pick">${nxt ? '<div class="start">Start with</div>' : ''}${first}</div>
+      ${doc.why ? `<p class="why">${inline(String(doc.why))}</p>` : ''}
+      ${nxt ? `<div class="next doc-pick">
+        <div class="doc-name"><span>If it doesn't settle &rarr; <strong>${esc(String(nxt.name))}</strong></span>${infoBtn(nxt)}</div>${aboutBox(nxt)}
+        ${nxt.when ? `<p class="when">${inline(String(nxt.when))}</p>` : ''}</div>` : ''}
+      ${guide ? `<div class="next doc-pick">
+        <div class="doc-name"><span><strong>${esc(String(guide.name))}</strong>, ${esc(String(guide.label))}, can also guide you while you arrange this.</span>${infoBtn(guide)}</div>${ownBox(guide)}</div>` : ''}</aside>`;
   }
   if (assessed) html += SOON;   // after an assessment only
   const older = d.kind ? [] : list(d.questions || (d.question ? [d.question] : []));   // chats saved in the old question-list format
@@ -524,6 +567,11 @@ async function sendMessage(text) {
 }
 
 $('composer').addEventListener('submit', (e) => { e.preventDefault(); const t = input.value.trim(); if (t) sendMessage(t); });
+document.addEventListener('click', (e) => {
+  const b = e.target.closest && e.target.closest('.info-btn'); if (!b) return;
+  const p = b.closest('.doc-pick') && b.closest('.doc-pick').querySelector('.about'); if (!p) return;
+  p.hidden = !p.hidden; b.setAttribute('aria-expanded', String(!p.hidden));
+});
 input.addEventListener('input', () => { autosize(); send.disabled = !input.value.trim(); });
 input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('composer').requestSubmit(); } });
 document.querySelectorAll('.chip').forEach((c) => c.addEventListener('click', () => sendMessage(c.textContent)));
@@ -540,9 +588,95 @@ function renderFamily() {
     const me = m.relation === 'self';
     return `<div class="member${me ? ' self' : ''}"><div class="av" aria-hidden="true">${esc(String(m.name).charAt(0).toUpperCase())}</div>
       <div class="who"><div class="nm">${esc(String(m.name))}${me ? ' (you)' : ''}</div>
-      <div class="sub">${esc(me ? m.age_text : `${RELATION_LABEL[m.relation] || m.relation} · ${m.age_text}`)}</div></div></div>`;
+      <div class="sub">${esc(me ? m.age_text : `${RELATION_LABEL[m.relation] || m.relation} · ${m.age_text}`)}</div></div>
+      <button class="edit-btn" type="button" data-id="${esc(String(m.id))}" aria-label="Edit ${esc(String(m.name))}">Edit</button></div>`;
   }).join('');
 }
+
+/* ---- their own doctors: asked after date of birth and gender, only the ones that fit the person:
+   everyone a family doctor, under 18 a paediatrician, women 18+ a gynaecologist ---- */
+const DOC_ROLES = ['family', 'paediatrician', 'gynaecologist'];
+function ageYears(dob) {
+  if (!dob) return null;
+  const [y, mo, d] = dob.split('-').map(Number), t = new Date();
+  return t.getFullYear() - y - (t.getMonth() + 1 < mo || (t.getMonth() + 1 === mo && t.getDate() < d) ? 1 : 0);
+}
+function rolesFor(dob, sex) {
+  const age = ageYears(dob);
+  if (age === null || age < 0 || !sex) return [];
+  return ['family', ...(age < 18 ? ['paediatrician'] : []), ...(sex === 'female' && age >= 18 ? ['gynaecologist'] : [])];
+}
+function question(role, who) {   // who: null for "you", else the person's first name
+  if (!who) return { family: 'Do you have a family doctor?', paediatrician: 'Do you have a paediatrician (children’s doctor)?', gynaecologist: 'Do you see a gynaecologist?' }[role];
+  return { family: `Does ${who} have a family doctor?`, paediatrician: `Does ${who} have a paediatrician (children’s doctor)?`, gynaecologist: `Does ${who} see a gynaecologist?` }[role];
+}
+const myFamilyDoctor = () => { const me = family.find((m) => m.relation === 'self'); return me && (me.doctors || []).find((d) => d.role === 'family') ? { me, doc: me.doctors.find((d) => d.role === 'family') } : null; };
+function buildDocs(box) {
+  box.innerHTML = '<div class="docs-title"></div>' + DOC_ROLES.map((r) => `
+    <div class="docq" data-role="${r}" hidden>
+      <label class="field"><span class="q"></span>
+        <select class="doc-has"><option value="">Select</option><option value="no">No</option><option value="yes">Yes</option></select></label>
+      <div class="doc-fields" hidden>
+        <label class="field"><span>Doctor&rsquo;s name</span><input class="doc-name" maxlength="80" autocomplete="off" placeholder="e.g. Dr. Anjali Mehta"></label>
+        <label class="field"><span>Phone number <em>(optional)</em></span><input class="doc-phone" type="tel" inputmode="tel" maxlength="20" autocomplete="off" placeholder="e.g. 98765 43210"></label>
+        <label class="field"><span>Clinic address <em>(optional)</em></span><textarea class="doc-address" maxlength="200" placeholder="Clinic name, area, city"></textarea></label>
+      </div>
+    </div>`).join('');
+  box.addEventListener('change', (e) => { if (e.target.classList.contains('doc-has')) onHas(e.target); });
+}
+function syncRequired(q) { q.querySelector('.doc-name').required = !q.hidden && !q.querySelector('.doc-fields').hidden; }
+function onHas(select) {
+  const q = select.closest('.docq'), v = select.value;
+  q.querySelector('.doc-fields').hidden = !(v === 'yes' || v === 'same');
+  if (v === 'same') {   // "Yes, same as <your name>'s": copy your family doctor
+    const mine = myFamilyDoctor();
+    if (mine) { q.querySelector('.doc-name').value = mine.doc.name; q.querySelector('.doc-phone').value = mine.doc.phone ? fmtPhone(mine.doc.phone) : ''; q.querySelector('.doc-address').value = mine.doc.address || ''; }
+  }
+  syncRequired(q);
+}
+function refreshDocs(box, dob, sex, who) {
+  const roles = rolesFor(dob, sex);
+  box.hidden = !roles.length;
+  box.querySelector('.docs-title').innerHTML = `${who ? 'Their' : 'Your'} doctors <em>(optional)</em>`;
+  box.querySelectorAll('.docq').forEach((q) => {
+    const role = q.dataset.role;
+    q.hidden = !roles.includes(role);
+    q.querySelector('.q').textContent = question(role, who);
+    if (role === 'family') {   // offer "same as yours" when adding someone else and you have a family doctor
+      const sel = q.querySelector('.doc-has'), mine = who ? myFamilyDoctor() : null;
+      let same = sel.querySelector('option[value="same"]');
+      if (mine && !same) { same = document.createElement('option'); same.value = 'same'; sel.appendChild(same); }
+      if (mine) same.textContent = `Yes, same as ${String(mine.me.name).split(/\s+/)[0]}’s`;
+      else if (same) { if (sel.value === 'same') { sel.value = ''; onHas(sel); } same.remove(); }
+    }
+    syncRequired(q);
+  });
+}
+function resetDocs(box) {
+  box.querySelectorAll('.docq').forEach((q) => {
+    q.querySelector('.doc-has').value = ''; q.querySelector('.doc-fields').hidden = true;
+    q.querySelectorAll('input, textarea').forEach((el) => { el.value = ''; });
+    syncRequired(q);
+  });
+}
+function fillDocs(box, doctors) {
+  (doctors || []).forEach((d) => {
+    const q = box.querySelector(`.docq[data-role="${d.role}"]`); if (!q || q.hidden) return;
+    q.querySelector('.doc-has').value = 'yes'; q.querySelector('.doc-fields').hidden = false;
+    q.querySelector('.doc-name').value = d.name || ''; q.querySelector('.doc-phone').value = d.phone ? fmtPhone(d.phone) : ''; q.querySelector('.doc-address').value = d.address || '';
+    syncRequired(q);
+  });
+}
+function docsPayload(box) {
+  if (box.hidden) return [];
+  return [...box.querySelectorAll('.docq')].filter((q) => !q.hidden && ['yes', 'same'].includes(q.querySelector('.doc-has').value)).map((q) => ({
+    role: q.dataset.role, name: q.querySelector('.doc-name').value, phone: q.querySelector('.doc-phone').value, address: q.querySelector('.doc-address').value,
+  }));
+}
+buildDocs($('p-docs')); buildDocs($('m-docs'));
+['p-dob', 'p-sex'].forEach((id) => $(id).addEventListener('input', () => refreshDocs($('p-docs'), $('p-dob').value, $('p-sex').value, null)));
+const memberWho = () => $('m-name').value.trim().split(/\s+/)[0] || 'this person';
+['m-dob', 'm-sex', 'm-name'].forEach((id) => $(id).addEventListener('input', () => { if (!editing) refreshDocs($('m-docs'), $('m-dob').value, $('m-sex').value, memberWho()); }));
 async function loadFamily() {
   const data = await api(`/family?visitor_id=${visitorId}`);
   family = data.members; renderFamily();
@@ -558,16 +692,22 @@ async function enter() {                       // after a good password: profile
 const profileBody = (relation, pre) => JSON.stringify({
   visitor_id: visitorId, relation, name: $(pre + '-name').value, dob: $(pre + '-dob').value, sex: $(pre + '-sex').value,
   conditions: $(pre + '-conditions').value, medicines: $(pre + '-medicines').value, allergies: $(pre + '-allergies').value,
+  doctors: docsPayload($(pre + '-docs')),
+});
+const editBody = () => JSON.stringify({
+  visitor_id: visitorId, conditions: $('m-conditions').value, medicines: $('m-medicines').value, allergies: $('m-allergies').value,
+  doctors: docsPayload($('m-docs')),
 });
 /* Save a profile once: the button is locked while the request is out (a second click can't send a second one),
-   and the saved person from the reply goes straight into the sidebar, with no second round trip to reload the family. */
-async function saveMember(form, relation, pre, errorBox, busyLabel) {
+   and the saved person from the reply goes straight into the sidebar (added, or replaced after an edit). */
+async function saveMember(form, send, errorBox, busyLabel) {
   if (form.dataset.busy) return false;
   const button = form.querySelector('button[type=submit]'), label = button.textContent;
   form.dataset.busy = '1'; button.disabled = true; button.textContent = busyLabel; errorBox.textContent = '';
   try {
-    const saved = await api('/members', { method: 'POST', body: profileBody(relation, pre) });
-    if (!family.some((m) => m.id === saved.id)) family.push(saved);
+    const saved = await send();
+    const i = family.findIndex((m) => m.id === saved.id);
+    if (i >= 0) family[i] = saved; else family.push(saved);
     renderFamily();
     return true;
   } catch (err) {
@@ -579,7 +719,8 @@ async function saveMember(form, relation, pre, errorBox, busyLabel) {
 }
 $('profile-form').addEventListener('submit', async (e) => {
   e.preventDefault();
-  if (!(await saveMember($('profile-form'), 'self', 'p', $('profile-error'), 'Saving…'))) return;
+  const send = () => api('/members', { method: 'POST', body: profileBody('self', 'p') });
+  if (!(await saveMember($('profile-form'), send, $('profile-error'), 'Saving…'))) return;
   try { await loadHistory(); }
   catch (err) { if (err.message !== 'auth') $('profile-error').textContent = err.message; }
 });
@@ -587,13 +728,42 @@ const closeDrawer = () => { shell.dataset.drawer = 'closed'; };
 const closeModal = () => modal.classList.remove('open');
 $('menu-btn').addEventListener('click', () => { shell.dataset.drawer = shell.dataset.drawer === 'open' ? 'closed' : 'open'; });
 $('backdrop').addEventListener('click', closeDrawer);
-$('add-member-btn').addEventListener('click', () => { $('m-form').reset(); $('m-error').textContent = ''; closeDrawer(); modal.classList.add('open'); $('m-relation').focus(); });
+/* One window for both: adding someone new, and editing a saved person (health details and their doctors only). */
+let editing = null;
+function setIdentity(on) {   // relation, name, date of birth, gender: shown when adding, locked away when editing
+  $('m-identity').hidden = !on;
+  $('m-identity').querySelectorAll('input, select').forEach((el) => { el.disabled = !on; });
+}
+function openAdd() {
+  editing = null; $('m-form').reset(); resetDocs($('m-docs')); $('m-docs').hidden = true; setIdentity(true);
+  $('add-title').textContent = 'Add a family member'; $('m-who').hidden = true; $('m-submit').textContent = 'Add';
+  $('m-more').open = false; $('m-error').textContent = ''; closeDrawer(); modal.classList.add('open'); $('m-relation').focus();
+}
+function openEdit(m) {
+  editing = m; $('m-form').reset(); resetDocs($('m-docs')); setIdentity(false);
+  const me = m.relation === 'self';
+  $('add-title').textContent = me ? 'Edit your profile' : `Edit ${m.name}`;
+  $('m-who').textContent = `${me ? 'You' : RELATION_LABEL[m.relation] || m.relation} · ${m.age_text}`; $('m-who').hidden = false;
+  $('m-conditions').value = m.conditions || ''; $('m-medicines').value = m.medicines || ''; $('m-allergies').value = m.allergies || '';
+  $('m-more').open = !!(m.conditions || m.medicines || m.allergies);
+  refreshDocs($('m-docs'), m.dob, m.sex, me ? null : String(m.name).split(/\s+/)[0]);
+  fillDocs($('m-docs'), m.doctors);
+  $('m-submit').textContent = 'Save'; $('m-error').textContent = ''; closeDrawer(); modal.classList.add('open');
+}
+$('add-member-btn').addEventListener('click', openAdd);
+$('family-list').addEventListener('click', (e) => {
+  const b = e.target.closest('.edit-btn'); if (!b) return;
+  const m = family.find((x) => String(x.id) === b.dataset.id); if (m) openEdit(m);
+});
 $('m-cancel').addEventListener('click', closeModal);
 modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeModal(); closeDrawer(); } });
 $('m-form').addEventListener('submit', async (e) => {
   e.preventDefault();
-  if (await saveMember($('m-form'), $('m-relation').value, 'm', $('m-error'), 'Adding…')) closeModal();
+  const send = editing
+    ? () => api(`/members/${editing.id}`, { method: 'PUT', body: editBody() })
+    : () => api('/members', { method: 'POST', body: profileBody($('m-relation').value, 'm') });
+  if (await saveMember($('m-form'), send, $('m-error'), editing ? 'Saving…' : 'Adding…')) closeModal();
 });
 
 $('gate-form').addEventListener('submit', async (e) => {

@@ -142,18 +142,68 @@ DOCTORS = {
 }
 
 
+# The family's OWN doctors (saved on their profiles). What the (i) shows under that doctor's name and number.
+OWN_ABOUT = {
+    "family": "Your family doctor already knows you and your health story. They're the best first stop for everyday "
+              "illness, can look after the whole family, and will guide you to the right specialist when it's needed.",
+    "paediatrician": "Your child's own doctor, who knows how they've grown and what they've had before. The right first "
+                     "stop for fevers, coughs, tummy troubles, rashes and vaccines.",
+    "gynaecologist": "Your own doctor for women's health (periods, pregnancy and private concerns), who already knows "
+                     "your history, so you don't have to start from the beginning.",
+}
+OWN_WORDS = {"family": "family doctor", "paediatrician": "paediatrician", "gynaecologist": "gynaecologist"}
+OWN_ROLE_FOR = {"general_physician": "family", "paediatrician": "paediatrician", "gynaecologist": "gynaecologist"}
+
+
+def _own(d: dict, role: str, whose: str) -> dict:
+    return {"role": role, "label": f"{whose} {OWN_WORDS[role]}", "name": d["name"], "phone": d.get("phone", ""),
+            "address": d.get("address", ""), "about": OWN_ABOUT[role]}
+
+
+def with_own(card, member, own_doctors: list, emergency: bool = False):
+    """Put the patient's own doctor on the card. If the doctor we chose is a kind they already have (family doctor,
+    paediatrician, gynaecologist), their doctor takes its place. If we chose any other specialist, their own doctor
+    is added as 'can also guide you' (their paediatrician for a child, else their family doctor), but not in an
+    emergency, where the emergency message must stay the only instruction."""
+    if not card or not member or not own_doctors:
+        return card
+    mine = {d["role"]: d for d in own_doctors}
+    whose = "your" if member["relation"] == "self" else f"{member['name'].split()[0]}'s"
+    role = OWN_ROLE_FOR.get(card["specialty"])
+    if role in mine:
+        card["own"] = _own(mine[role], role, whose)
+    elif card["specialty"] != "general_physician" and not emergency:
+        guide = next((r for r in ("paediatrician", "family") if r in mine and r != role), None)
+        if guide:
+            card["guide"] = _own(mine[guide], guide, whose)
+    return card
+
+
+def _key(value) -> str:
+    return str(value or "").strip().lower()  # the API doesn't guarantee the capitalisation of enum values
+
+
+def _text(value) -> str:
+    return " ".join(str(value or "").split())
+
+
 def card(raw):
-    """The doctor card the page shows: name and plain-words description from the list above, plus Claude's one-line
-    reason for this patient. None if Claude's pick isn't on the list."""
+    """The doctor card the page shows: the first doctor (name and plain-words description from the list above, plus
+    Claude's one-line reason) and, only when the first is the General Physician, the specialist to see if it doesn't
+    settle, with the signs. None if Claude's first pick isn't on the list."""
     if not isinstance(raw, dict):
         return None
-    key = str(raw.get("specialty") or "").strip().lower()  # the API doesn't guarantee the capitalisation of enum values
-    if key not in DOCTORS:
+    first = _key(raw.get("first") or raw.get("specialty"))  # 'specialty' was the field's name before 'first'
+    if first not in DOCTORS:
         return None
-    d = DOCTORS[key]
+    then = _key(raw.get("then"))
+    nxt = None
+    if first == "general_physician" and then in DOCTORS and then != first:  # a specialist first never gets a second doctor
+        nxt = {"specialty": then, "name": DOCTORS[then]["name"], "about": DOCTORS[then]["about"], "when": _text(raw.get("then_when"))}
     return {
-        "specialty": key,
-        "name": d["name"],
-        "about": d["about"],
-        "why": " ".join(str(raw.get("why") or "").split()),
+        "specialty": first,
+        "name": DOCTORS[first]["name"],
+        "about": DOCTORS[first]["about"],
+        "why": _text(raw.get("why")),
+        "then": nxt,
     }

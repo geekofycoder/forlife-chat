@@ -149,15 +149,31 @@ why uncommon but worth ruling out.
 do_now (0 to 4 steps, max 12 words each): safe self-care that clearly fits (fluids, rest, light food); no doses; for a \
 baby or child no amounts (say "small sips, often" and that the doctor or pharmacist will say how much); empty if \
 nothing clearly fits.
-doctor: the ONE kind of doctor to suggest for this patient, chosen for the most likely condition and for THIS patient. \
-It only names who to see; when to go is already in the headline.
-- specialty: exactly one of: {", ".join(DOCTORS)}. A child: usually paediatrician, unless the problem clearly belongs \
-to another doctor (a toothache: dentist). Not sure which specialist fits: general_physician, who can refer onward.
+doctor: who to see, for THIS patient and the most likely condition. It only names who; when to go is already in the \
+headline.
+first: check these in order; the first one that is true decides:
+  1. MUST: the most likely condition is moderate or immediate and clearly belongs to one specialty: first is that \
+specialist and then is none (kidney stone: urologist). Never a family doctor first here.
+  2. it needs their tools: eyes (ophthalmologist), teeth or gums (dentist).
+  3. the patient: a child under 18 goes to a paediatrician; pregnancy or a women's health concern goes to a \
+gynaecologist.
+  4. it was already treated and isn't better, or it has gone on for many weeks: the specialist it belongs to.
+  Otherwise general_physician: in India a family doctor or physician handles most everyday illness well and refers \
+onward when needed. Never send someone to a specialist just "to be safe".
+then: only when first is general_physician AND the most likely condition itself would need that specialist if it \
+lingers (blocked ears that don't clear: ENT). Everyday illness that a family doctor keeps treating (acidity, a cold, \
+loose motions, a mild rash) gets none. Never the same doctor as first.
+- first: exactly one of: {", ".join(DOCTORS)}.
 - why (max 30 words): the reason, said the way a calm, friendly family doctor would, in everyday words: what they \
-told you, and that this is the doctor who looks after exactly that ("Since his mouth sores are making it hard to \
-drink, a children's doctor can check how well he is keeping up with fluids."). No fear words, no certainty ("it \
-looks like"), never a symptom they didn't report. The page already shows what this kind of doctor does, so don't \
-explain the job.
+told you, and that this doctor looks after exactly that ("A blocked feeling with a cold usually settles; a family \
+doctor can look in your ears and help clear the cold."). No fear words, no certainty ("it looks like"), never a \
+symptom they didn't report. Don't explain the doctor's job; the page shows it. If the family file lists their own \
+doctor of the kind you chose (family doctor for general_physician, paediatrician, gynaecologist), say "your family \
+doctor" / "his paediatrician" / "her gynaecologist" instead of a generic one; the page adds the name.
+- then: none, or one of the doctors above.
+- then_when (max 20 words): 2 or 3 plain signs that it's time for that specialist ("Not better in 2 weeks, your \
+hearing drops, or the pulsing carries on after the cold."). Reasons to see a specialist later, never emergency signs \
+(those belong in the headline). Empty if then is none.
 
 RISK (medical_risk is for THIS patient, not the condition in general)
 - low: usually settles at home; watching the warning signs is enough.
@@ -186,7 +202,7 @@ shows it.
 - do_now (2 to 4 steps): only safe steps while help comes: stay with them, keep them calm and still, no food, drink or \
 medicine unless the emergency service says so, note when it started, keep the medicine list and reports ready. No \
 remedies.
-- doctor: the kind of doctor who will look after this once the emergency team has seen them.
+- doctor: first is the kind of doctor who will look after this once the emergency team has seen them; then is none.
 """
 
 _RISK = {"type": "string", "enum": ["low", "moderate", "immediate"]}
@@ -235,8 +251,13 @@ CONCLUSION_SCHEMA = {
         "do_now": {"type": "array", "items": {"type": "string"}},
         "doctor": {
             "type": "object",
-            "properties": {"specialty": {"type": "string", "enum": list(DOCTORS)}, "why": {"type": "string"}},
-            "required": ["specialty", "why"],
+            "properties": {
+                "first": {"type": "string", "enum": list(DOCTORS)},
+                "why": {"type": "string"},
+                "then": {"type": "string", "enum": ["none", *DOCTORS]},
+                "then_when": {"type": "string"},
+            },
+            "required": ["first", "why", "then", "then_when"],
             "additionalProperties": False,
         },
     },
