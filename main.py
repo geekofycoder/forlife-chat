@@ -46,7 +46,7 @@ REQUIRED = ["DATABASE_URL", "ANTHROPIC_API_KEY", "SHARED_PASSWORD"]
 TRY_AGAIN = "I am facing some internal issues, don't worry I will come back to you and help you with your cure!"
 CONFIDENCE_TO_CONCLUDE = 90  # confidence needed before the assessment is given
 MIN_QUESTIONS = 6            # never give the assessment before this many questions have been asked
-MAX_QUESTIONS = 12            # always give it once this many have been asked
+MAX_QUESTIONS = 8            # always give it once this many have been asked
 
 MEMBER_COLUMNS = "id, relation, name, dob, sex, conditions, medicines, allergies"
 # Each member's own doctors as a JSON list, added to every member query ({m} is the members alias)
