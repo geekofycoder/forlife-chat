@@ -559,9 +559,28 @@ const profileBody = (relation, pre) => JSON.stringify({
   visitor_id: visitorId, relation, name: $(pre + '-name').value, dob: $(pre + '-dob').value, sex: $(pre + '-sex').value,
   conditions: $(pre + '-conditions').value, medicines: $(pre + '-medicines').value, allergies: $(pre + '-allergies').value,
 });
+/* Save a profile once: the button is locked while the request is out (a second click can't send a second one),
+   and the saved person from the reply goes straight into the sidebar, with no second round trip to reload the family. */
+async function saveMember(form, relation, pre, errorBox, busyLabel) {
+  if (form.dataset.busy) return false;
+  const button = form.querySelector('button[type=submit]'), label = button.textContent;
+  form.dataset.busy = '1'; button.disabled = true; button.textContent = busyLabel; errorBox.textContent = '';
+  try {
+    const saved = await api('/members', { method: 'POST', body: profileBody(relation, pre) });
+    if (!family.some((m) => m.id === saved.id)) family.push(saved);
+    renderFamily();
+    return true;
+  } catch (err) {
+    if (err.message !== 'auth') errorBox.textContent = err.message;
+    return false;
+  } finally {
+    delete form.dataset.busy; button.disabled = false; button.textContent = label;
+  }
+}
 $('profile-form').addEventListener('submit', async (e) => {
-  e.preventDefault(); $('profile-error').textContent = '';
-  try { await api('/members', { method: 'POST', body: profileBody('self', 'p') }); await loadFamily(); await loadHistory(); }
+  e.preventDefault();
+  if (!(await saveMember($('profile-form'), 'self', 'p', $('profile-error'), 'Saving…'))) return;
+  try { await loadHistory(); }
   catch (err) { if (err.message !== 'auth') $('profile-error').textContent = err.message; }
 });
 const closeDrawer = () => { shell.dataset.drawer = 'closed'; };
@@ -573,9 +592,8 @@ $('m-cancel').addEventListener('click', closeModal);
 modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeModal(); closeDrawer(); } });
 $('m-form').addEventListener('submit', async (e) => {
-  e.preventDefault(); $('m-error').textContent = '';
-  try { await api('/members', { method: 'POST', body: profileBody($('m-relation').value, 'm') }); await loadFamily(); closeModal(); }
-  catch (err) { if (err.message !== 'auth') $('m-error').textContent = err.message; }
+  e.preventDefault();
+  if (await saveMember($('m-form'), $('m-relation').value, 'm', $('m-error'), 'Adding…')) closeModal();
 });
 
 $('gate-form').addEventListener('submit', async (e) => {

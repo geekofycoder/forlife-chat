@@ -329,17 +329,32 @@ async def add_member(body: MemberIn):
         m = family.clean_member(body, today)
     except ValueError as e:
         raise HTTPException(422, str(e))
-    count = await db_run("fetchval", "select count(*) from members where visitor_id = $1", body.visitor_id)
-    if count >= family.MAX_MEMBERS:
-        raise HTTPException(409, f"You can add up to {family.MAX_MEMBERS} people.")
+    # One database trip: add the person unless the same person (relation, name, date of birth, gender) is already there,
+    # in which case that profile is returned, so a double click or a retry can't create a duplicate. The cap is checked here too.
     try:
         row = await app.state.db.fetchrow(
-            f"insert into members (visitor_id, relation, name, dob, sex, conditions, medicines, allergies) "
-            f"values ($1, $2, $3, $4, $5, $6, $7, $8) returning {MEMBER_COLUMNS}",
+            f"with same as (select {MEMBER_COLUMNS} from members where visitor_id = $1::uuid and relation = $2::text "
+            f"and lower(name) = lower($3::text) and dob = $4::date and sex = $5::text limit 1), "
+            f"added as (insert into members (visitor_id, relation, name, dob, sex, conditions, medicines, allergies) "
+            f"select $1::uuid, $2::text, $3::text, $4::date, $5::text, $6::text, $7::text, $8::text "
+            f"where not exists (select 1 from same) and (select count(*) from members where visitor_id = $1::uuid) < {family.MAX_MEMBERS} "
+            f"returning {MEMBER_COLUMNS}) "
+            f"select * from added union all select * from same",
             body.visitor_id, m["relation"], m["name"], m["dob"], m["sex"], m["conditions"], m["medicines"], m["allergies"],
         )
-    except asyncpg.UniqueViolationError:
-        raise HTTPException(409, "Your own profile is already set up.")
+    except asyncpg.UniqueViolationError as e:
+        if e.constraint_name == "members_one_self_per_visitor":
+            raise HTTPException(409, "Your own profile is already set up.")
+        # members_no_duplicate_people: another request saved this same person a moment ago (two tabs at the same instant)
+        row = await db_run(
+            "fetchrow",
+            f"select {MEMBER_COLUMNS} from members where visitor_id = $1 and relation = $2 and lower(name) = lower($3) and dob = $4 and sex = $5",
+            body.visitor_id, m["relation"], m["name"], m["dob"], m["sex"],
+        )
+        if row is None:
+            raise HTTPException(409, "That person is already added.")
+    if row is None:
+        raise HTTPException(409, f"You can add up to {family.MAX_MEMBERS} people.")
     return family.public_member(row, today)
 
 

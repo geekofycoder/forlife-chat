@@ -32,5 +32,6 @@ create table public.members (
 
 create index members_visitor_id_idx on public.members (visitor_id, created_at);
 create unique index members_one_self_per_visitor on public.members (visitor_id) where relation = 'self';  -- only one "you" each
+create unique index members_no_duplicate_people on public.members (visitor_id, relation, lower(name), dob, sex);  -- same person can't be added twice, even by two requests at once
 
 alter table public.members enable row level security;
