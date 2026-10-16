@@ -59,7 +59,11 @@ GROUP_RULES = {
                    "fainting, chest pain or unable to keep fluids down: immediate. Extra careful from 75 and 85.",
 }
 
-INTERVIEW_PROMPT = PERSONA + """
+# The two numbers behind the stop rule. main.py imports them and the prompt below quotes them, so they can't drift apart.
+CONFIDENCE_TO_CONCLUDE = 70  # confidence at which the assessment is given (once the minimum number of questions is asked)
+REOPEN_BELOW = 60            # after the assessment: a follow-up that drops confidence below this reopens the interview
+
+INTERVIEW_PROMPT = PERSONA + f"""
 YOUR JOB RIGHT NOW
 Take the history like a good, experienced doctor in the first minutes of a consultation. No advice, diagnosis, steps or \
 warnings yet: a separate step gives those once you are confident. Listen, remember, and ask the one question that will \
@@ -100,13 +104,13 @@ headings or bold. A side question gets a one-sentence answer first. First reply:
 patient: first name, as in the family file, of the person this is about; empty if unclear.
 confidence (0 to 100, hidden; decides when to stop asking): how sure you are of the single likeliest explanation AND \
 that nothing dangerous is missed. Rarely above 30 on the opening complaint; raise it as answers make one explanation \
-stand out, lower it on surprises; not above 60 until you have asked the warning signs that matter. 70 or more means you \
+stand out, lower it on surprises; not above 60 until you have asked the warning signs that matter. {CONFIDENCE_TO_CONCLUDE} or more means you \
 could give your assessment now.
 ready_now: true only if the patient asks you to just tell them what you think, or can't answer any more.
 
 AFTER THE ASSESSMENT
 If the stage says it was given, the patient is following up: answer kindly and briefly, do not repeat it. A new symptom \
-or warning sign, a different person or a new complaint: confidence below 70 and your next question.
+or warning sign, a different person or a new complaint: confidence below {REOPEN_BELOW} and your next question.
 
 EMERGENCIES (every message; a worrying answer ends the questions)
 emergency true; reply calm and direct, two or three short sentences: call 112 (108 for an ambulance) or go to the \

@@ -30,7 +30,10 @@ from pydantic import BaseModel, Field
 
 import doctors
 import family
-from prompts import CONCLUSION_PROMPT, CONCLUSION_SCHEMA, EMERGENCY_NOTE, GROUP_RULES, GROUP_TITLES, INTERVIEW_PROMPT, INTERVIEW_SCHEMA
+from prompts import (
+    CONCLUSION_PROMPT, CONCLUSION_SCHEMA, CONFIDENCE_TO_CONCLUDE, EMERGENCY_NOTE, GROUP_RULES, GROUP_TITLES,
+    INTERVIEW_PROMPT, INTERVIEW_SCHEMA, REOPEN_BELOW,
+)
 
 log = logging.getLogger("forlife")
 log.setLevel(logging.INFO)
@@ -44,8 +47,8 @@ EFFORT = os.environ.get("CHAT_EFFORT", "low")
 INTERVIEW_EFFORT = os.environ.get("INTERVIEW_EFFORT", EFFORT)
 REQUIRED = ["DATABASE_URL", "ANTHROPIC_API_KEY", "SHARED_PASSWORD"]
 TRY_AGAIN = "I am facing some internal issues, don't worry I will come back to you and help you with your cure!"
-CONFIDENCE_TO_CONCLUDE = 90  # confidence needed before the assessment is given
-MIN_QUESTIONS = 6            # never give the assessment before this many questions have been asked
+# CONFIDENCE_TO_CONCLUDE (70) and REOPEN_BELOW (60) live in prompts.py, next to the prompt text that quotes them.
+MIN_QUESTIONS = 4            # never give the assessment before this many questions have been asked
 MAX_QUESTIONS = 8            # always give it once this many have been asked
 
 MEMBER_COLUMNS = "id, relation, name, dob, sex, conditions, medicines, allergies"
@@ -206,7 +209,7 @@ def decide(stage: str, asked_before: int, iv: dict) -> tuple[str, str]:
     if stage == "assessed":
         if iv.get("switched"):
             return "ask", "a different person"
-        if confidence < CONFIDENCE_TO_CONCLUDE:
+        if confidence < REOPEN_BELOW:
             return "ask", "new information lowered confidence"
         return "answer", "follow-up"
     if iv["ready_now"]:
