@@ -30,6 +30,7 @@ from pydantic import BaseModel, Field
 
 import doctors
 import family
+import places
 from prompts import (
     CONCLUSION_PROMPT, CONCLUSION_SCHEMA, CONFIDENCE_TO_CONCLUDE, EMERGENCY_NOTE, GROUP_RULES, GROUP_TITLES,
     INTERVIEW_PROMPT, INTERVIEW_SCHEMA, REOPEN_BELOW,
@@ -51,7 +52,7 @@ TRY_AGAIN = "I am facing some internal issues, don't worry I will come back to y
 MIN_QUESTIONS = 4            # never give the assessment before this many questions have been asked
 MAX_QUESTIONS = 8            # always give it once this many have been asked
 
-MEMBER_COLUMNS = "id, relation, name, dob, sex, conditions, medicines, allergies"
+MEMBER_COLUMNS = "id, relation, name, dob, sex, conditions, medicines, allergies, pincode"
 # Each member's own doctors as a JSON list, added to every member query ({m} is the members alias)
 DOCTORS_JSON = (
     "coalesce((select jsonb_agg(jsonb_build_object('role', d.role, 'name', d.name, 'phone', d.phone, 'address', d.address) "
@@ -328,15 +329,17 @@ class MemberIn(BaseModel):
     conditions: str = Field(default="", max_length=2000)
     medicines: str = Field(default="", max_length=2000)
     allergies: str = Field(default="", max_length=2000)
+    pincode: str = Field(default="", max_length=20)   # asked on the account holder's own profile, for "doctors near you"
     doctors: list[DoctorIn] = Field(default=[], max_length=3)
 
 
 class EditIn(BaseModel):
-    """What can be changed on a saved profile: health details and their own doctors (not name, age or relation)."""
+    """What can be changed on a saved profile: health details, pincode and their own doctors (not name, age or relation)."""
     visitor_id: uuid.UUID
     conditions: str = Field(default="", max_length=2000)
     medicines: str = Field(default="", max_length=2000)
     allergies: str = Field(default="", max_length=2000)
+    pincode: str | None = Field(default=None, max_length=20)   # left out = unchanged; empty = cleared
     doctors: list[DoctorIn] = Field(default=[], max_length=3)
 
 
@@ -348,7 +351,8 @@ async def get_family(visitor_id: uuid.UUID):
         raise HTTPException(503, "Family profiles are not set up yet. Please tell whoever runs this app.")
     today = datetime.now(IST).date()
     members = [family.public_member(r, today) for r in rows]
-    return {"members": members, "needs_profile": not any(m["relation"] == "self" for m in members)}
+    me = next((m for m in members if m["relation"] == "self"), None)
+    return {"members": members, "needs_profile": me is None, "needs_pincode": me is not None and not me["pincode"]}
 
 
 @app.post("/members", dependencies=[Depends(check_password)])
@@ -366,8 +370,8 @@ async def add_member(body: MemberIn):
         row = await app.state.db.fetchrow(
             f"with same as (select {MEMBER_COLUMNS} from members where visitor_id = $1::uuid and relation = $2::text "
             f"and lower(name) = lower($3::text) and dob = $4::date and sex = $5::text limit 1), "
-            f"added as (insert into members (visitor_id, relation, name, dob, sex, conditions, medicines, allergies) "
-            f"select $1::uuid, $2::text, $3::text, $4::date, $5::text, $6::text, $7::text, $8::text "
+            f"added as (insert into members (visitor_id, relation, name, dob, sex, conditions, medicines, allergies, pincode) "
+            f"select $1::uuid, $2::text, $3::text, $4::date, $5::text, $6::text, $7::text, $8::text, $10::text "
             f"where not exists (select 1 from same) and (select count(*) from members where visitor_id = $1::uuid) < {family.MAX_MEMBERS} "
             f"returning {MEMBER_COLUMNS}), "
             f"m as (select * from added union all select * from same), "
@@ -377,7 +381,7 @@ async def add_member(body: MemberIn):
             f"select m.*, coalesce((select jsonb_agg(jsonb_build_object('role', x.role, 'name', x.name, 'phone', x.phone, "
             f"'address', x.address) order by x.role) from docs x)::text, {DOCTORS_JSON.format(m='m')}) as doctors from m",
             body.visitor_id, m["relation"], m["name"], m["dob"], m["sex"], m["conditions"], m["medicines"], m["allergies"],
-            json.dumps(own),
+            json.dumps(own), m["pincode"],
         )
     except asyncpg.UniqueViolationError as e:
         if e.constraint_name == "members_one_self_per_visitor":
@@ -403,11 +407,13 @@ async def edit_member(member_id: uuid.UUID, body: EditIn):
         raise HTTPException(404, "That person isn't in your family list.")
     try:
         own = family.clean_doctors(body.doctors, who["dob"], who["sex"], today)
+        pincode = family.clean_pincode(body.pincode)
     except ValueError as e:
         raise HTTPException(422, str(e))
-    # One statement: update the health details, drop the doctors they removed, add or update the rest.
+    # One statement: update the health details (and the pincode, if one was sent), drop the doctors they removed, add or update the rest.
     row = await app.state.db.fetchrow(
-        f"with m as (update members set conditions = $3::text, medicines = $4::text, allergies = $5::text "
+        f"with m as (update members set conditions = $3::text, medicines = $4::text, allergies = $5::text, "
+        f"pincode = case when $8::boolean then $9::text else pincode end "
         f"where id = $1::uuid and visitor_id = $2::uuid returning {MEMBER_COLUMNS}), "
         f"gone as (delete from member_doctors where member_id = $1::uuid and visitor_id = $2::uuid and not (role = any($6::text[]))), "
         f"up as (insert into member_doctors (visitor_id, member_id, role, name, phone, address) "
@@ -419,10 +425,30 @@ async def edit_member(member_id: uuid.UUID, body: EditIn):
         f"'address', u.address) order by u.role) from up u), '[]'::jsonb)::text as doctors from m",
         member_id, body.visitor_id, family.clean_text(body.conditions)[:500], family.clean_text(body.medicines)[:500],
         family.clean_text(body.allergies)[:500], [d["role"] for d in own], json.dumps(own),
+        body.pincode is not None, pincode or None,
     )
     if row is None:
         raise HTTPException(404, "That person isn't in your family list.")
     return family.public_member(row, today)
+
+
+@app.get("/doctors/nearby", dependencies=[Depends(check_password)])
+async def doctors_nearby(visitor_id: uuid.UUID, doctor: str):
+    """The best two doctors or clinics of this kind near the account holder's pincode (looked up here, never taken from the page)."""
+    key = doctor.strip().lower()
+    if key not in doctors.DOCTORS or key not in places.SEARCH_PHRASE:
+        raise HTTPException(422, "I can't look that kind of doctor up yet.")
+    pincode = await db_run("fetchval", "select pincode from members where visitor_id = $1 and relation = 'self'", visitor_id)
+    if not pincode:
+        raise HTTPException(409, "Please add your pincode to your profile first, and I'll find doctors near you.")
+    try:
+        found = await places.find_nearby(db_run, pincode, key)
+    except places.NotConfigured:
+        raise HTTPException(503, "Finding doctors near you isn't set up yet. Please tell whoever runs this app.")
+    except places.ProviderError as e:
+        log.error("nearby search failed: %s", e)
+        raise HTTPException(502, "I couldn't look up doctors near you just now. Please try again in a moment.")
+    return {"pincode": pincode, "doctor": doctors.DOCTORS[key]["name"], "results": found["results"], "stale": found["source"] == "stale"}
 
 
 @app.get("/", include_in_schema=False)

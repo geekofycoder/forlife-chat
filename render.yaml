@@ -17,3 +17,5 @@ services:
         sync: false
       - key: SHARED_PASSWORD
         sync: false
+      - key: SERPER_API_KEY    # "doctors near you"; leave it empty and that button says it isn't set up yet
+        sync: false

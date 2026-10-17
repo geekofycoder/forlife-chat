@@ -95,6 +95,14 @@ def clean_text(text) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[\x00-\x1f\x7f]", " ", text or "")).strip()
 
 
+def clean_pincode(text) -> str:
+    """A 6-digit Indian pincode (spaces ignored), or '' if none was given. Raises ValueError with a message that is safe to show."""
+    pin = re.sub(r"\s+", "", text or "")
+    if pin and not re.fullmatch(r"[1-9][0-9]{5}", pin):
+        raise ValueError("Please enter your 6-digit pincode.")
+    return pin
+
+
 def clean_member(m, today: date) -> dict:
     """Validate and tidy a new profile. Raises ValueError with a message that is safe to show."""
     if m.relation not in RELATIONS:
@@ -111,6 +119,7 @@ def clean_member(m, today: date) -> dict:
     return {
         "relation": m.relation, "name": name, "dob": m.dob, "sex": m.sex,
         "conditions": clean_text(m.conditions)[:500], "medicines": clean_text(m.medicines)[:500], "allergies": clean_text(m.allergies)[:500],
+        "pincode": clean_pincode(m.pincode) or None,   # asked on the account holder's own profile; empty is stored as null
     }
 
 
@@ -173,6 +182,7 @@ def public_member(m, today: date) -> dict:
         "id": str(m["id"]), "relation": m["relation"], "name": m["name"], "dob": m["dob"].isoformat(), "sex": m["sex"],
         "conditions": m["conditions"], "medicines": m["medicines"], "allergies": m["allergies"],
         "doctors": member_doctors(m), "age_text": a["text"], "label": a["label"],
+        "pincode": (m["pincode"] if "pincode" in m.keys() else None) or "",
     }
 
 

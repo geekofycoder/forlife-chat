@@ -8,3 +8,4 @@ __pycache__/
 skills-lock.json
 session_id.txt
 *.pdf
+confidence_latency.txt

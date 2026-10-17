@@ -135,6 +135,25 @@
   .soon-title { font: 600 17px/1.3 var(--font-display); }
   .soon-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
   .soon-btn { padding: 9px 16px; border-radius: var(--radius-pill); border: 1px solid rgba(250,246,238,.3); background: rgba(250,246,238,.08); color: rgba(250,246,238,.75); font: 500 15px/1.2 var(--font-sans); cursor: not-allowed; }
+  /* "Find near you": the button under a suggested doctor, and the places it brings back */
+  .find { margin-top: 10px; }
+  .find-btn { min-height: 40px; padding: 8px 14px; border-radius: var(--radius-pill); border: 1.5px solid var(--green-500); background: var(--surface-0); color: var(--green-900); font: 600 14.5px/1.2 var(--font-sans); cursor: pointer; }
+  .find-btn:hover:not(:disabled) { background: var(--green-100); }
+  .find-btn:disabled { opacity: .65; cursor: default; }
+  .find-link { padding: 4px 0; border: 0; text-align: left; background: none; color: var(--green-700); font: 500 14px/1.3 var(--font-sans); text-decoration: underline; cursor: pointer; }
+  .find-link:disabled { opacity: .65; cursor: default; }
+  .found { display: grid; gap: 8px; } .found > :first-child { margin-top: 8px; }
+  .place { padding: 10px 12px; border-radius: 10px; background: var(--surface-1); border: 1px solid var(--line); }
+  .place-name { font: 600 16px/1.3 var(--font-display); color: var(--ink-900); }
+  .place-meta { margin-top: 2px; font-size: 14px; color: var(--ink-500); }
+  .place-meta .stars { font-weight: 600; color: #9a5b0b; }
+  .place-addr { margin-top: 4px; font-size: 14px; color: var(--ink-700); }
+  .place-actions { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 6px; }
+  .place-actions a { padding: 4px 0; font: 600 14.5px/1.3 var(--font-sans); color: var(--green-700); text-decoration: none; }
+  .place-actions a:hover { text-decoration: underline; }
+  .found-note { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--ink-500); }
+  .found-none { margin: 0; font-size: 14.5px; color: var(--ink-700); }
+  .found-err { margin: 0; font-size: 14px; color: var(--danger); }
   .assistant .bubble.urgent { background: #fef3f2; border: 1.5px solid #fda29b; }
   .urgent-label { margin-bottom: 4px; font: 600 12px/1.3 var(--font-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--danger); }
 
@@ -198,6 +217,7 @@
   body[data-view="profile"] #profile { display: flex; }
   .card.wide { max-width: 520px; }
   .field { display: block; margin: 0 0 12px; }
+  .field[hidden] { display: none; }
   .field > span { display: block; margin-bottom: 5px; font: 600 13.5px/1.3 var(--font-sans); color: var(--ink-900); }
   .field em { font-style: normal; font-weight: 400; color: var(--ink-500); }
   .field input, .field select, .field textarea, .card .field input, .card .field select, .card .field textarea {
@@ -290,6 +310,7 @@
       <label class="field"><span>Gender</span>
         <select id="p-sex" required><option value="" disabled selected>Select</option><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option></select></label>
     </div>
+    <label class="field"><span>Pincode <em>(so I can find doctors near you)</em></span><input id="p-pincode" inputmode="numeric" maxlength="6" pattern="[1-9][0-9]{5}" title="A 6-digit pincode" placeholder="e.g. 560038" required autocomplete="off"></label>
     <div id="p-docs" class="docs" hidden></div>
     <label class="field"><span>Long-term conditions <em>(optional)</em></span><textarea id="p-conditions" maxlength="500" placeholder="For example diabetes or asthma. Leave blank if none."></textarea></label>
     <label class="field"><span>Regular medicines <em>(optional)</em></span><textarea id="p-medicines" maxlength="500" placeholder="Leave blank if none."></textarea></label>
@@ -351,6 +372,7 @@
         <select id="m-sex" required><option value="" disabled selected>Select</option><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option></select></label>
     </div>
     </div>
+    <label class="field" id="m-pin-field" hidden><span>Pincode <em>(so I can find doctors near you)</em></span><input id="m-pincode" inputmode="numeric" maxlength="6" pattern="[1-9][0-9]{5}" title="A 6-digit pincode" placeholder="e.g. 560038" autocomplete="off" disabled></label>
     <div id="m-docs" class="docs" hidden></div>
     <details class="more" id="m-more"><summary>Health details (optional)</summary>
       <label class="field"><span>Long-term conditions</span><textarea id="m-conditions" maxlength="500" placeholder="Leave blank if none."></textarea></label>
@@ -459,6 +481,27 @@ const fmtPhone = (p) => (/^\+91\d{10}$/.test(p) ? `+91 ${p.slice(3, 8)} ${p.slic
 /* Their own doctor's (i): their number (tap to call), clinic address, then what that kind of doctor is for them. */
 const ownBox = (o) => `<div class="about" hidden>${o.phone ? `<a class="tel" href="tel:${esc(String(o.phone))}">Call ${esc(fmtPhone(String(o.phone)))}</a>` : ''}${o.address ? `<div class="addr">${esc(String(o.address))}</div>` : ''}${o.about ? `<p>${esc(String(o.about))}</p>` : ''}</div>`;
 
+/* "Find near you": which kind of doctor comes from the card, the pincode from your profile (the server looks it up itself).
+   One search per tap: the click handler near the end of the page marks the box busy before anything else. */
+const myPin = () => { const me = family.find((m) => m.relation === 'self'); return me && me.pincode ? String(me.pincode) : ''; };
+const article = (name) => (/^[AEIO]/i.test(name) ? 'an' : 'a');
+const findLabel = (name) => `Find ${article(name)} ${name} near ${myPin() || 'you'}`;
+const findBox = (key, name) => key ? `<div class="find" data-key="${esc(String(key))}" data-name="${esc(String(name))}"><button type="button" class="find-btn">${esc(findLabel(String(name)))}</button><div class="found" aria-live="polite"></div></div>` : '';
+const findOwn = (key, own) => key ? `<div class="find" data-key="${esc(String(key))}"><button type="button" class="find-link">Not able to reach ${esc(String(own.name))}? Find nearby</button><div class="found" aria-live="polite"></div></div>` : '';
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+function renderFound(d) {
+  const rs = list(d.results), pin = esc(String(d.pincode || ''));
+  if (!rs.length) return `<p class="found-none">I couldn't find a well-rated ${esc(String(d.doctor || 'doctor'))} near ${pin}. Your own doctor or a nearby clinic can point you to one.</p>`;
+  const num = (v) => (v === null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
+  const place = (p) => {
+    const phone = /^\+91\d{10}$/.test(String(p.phone || '')) ? String(p.phone) : '', lat = num(p.lat), lng = num(p.lng), km = num(p.km), rating = num(p.rating), count = num(p.count);
+    const meta = [rating !== null ? `<span class="stars">&#9733; ${rating.toFixed(1)}</span>${count !== null ? ` (${plural(count, 'rating')})` : ''}` : '', km !== null ? `${km < 0.1 ? 'under 0.1' : km.toFixed(1)} km from ${pin}` : ''].filter(Boolean).join(' &middot; ');
+    return `<div class="place"><div class="place-name">${esc(String(p.name || ''))}</div>${meta ? `<div class="place-meta">${meta}</div>` : ''}${p.address ? `<div class="place-addr">${esc(String(p.address))}</div>` : ''}
+      <div class="place-actions">${phone ? `<a href="tel:${phone}">Call ${esc(fmtPhone(phone))}</a>` : ''}${lat !== null && lng !== null ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}" target="_blank" rel="noopener">Directions</a>` : ''}</div></div>`;
+  };
+  return rs.map(place).join('') + `<p class="found-note">From Google Maps listings near ${pin}${d.stale ? ', saved a little while ago, so details may have changed' : ''}. Please check timings before you go. ForLife doesn't recommend or vouch for these places.</p>`;
+}
+
 function renderAssistant(content) {
   const d = parseReply(content);
   const text = [d.reply, d.headline, d.message].find((t) => typeof t === 'string') || '';
@@ -483,12 +526,15 @@ function renderAssistant(content) {
     const first = own
       ? `<div class="doc-name"><h4>${esc(String(own.name))}</h4><span class="role">&middot; ${esc(String(own.label))}</span>${infoBtn(own)}</div>${ownBox(own)}`
       : `<div class="doc-name"><h4>${esc(String(doc.name))}</h4>${infoBtn(doc)}</div>${aboutBox(doc)}`;
+    // A way to find them nearby, for each doctor we point to that they don't already have. Not on an emergency: the emergency message stays the only instruction.
+    const findFirst = emergency ? '' : own ? findOwn(doc.specialty, own) : findBox(doc.specialty, doc.name);
+    const findNext = emergency || !nxt ? '' : findBox(nxt.specialty, nxt.name);
     html += `<aside class="doctor" aria-label="Which doctor to see"><div class="box-title">Who to see</div>
       <div class="doc-pick">${nxt ? '<div class="start">Start with</div>' : ''}${first}</div>
-      ${doc.why ? `<p class="why">${inline(String(doc.why))}</p>` : ''}
+      ${doc.why ? `<p class="why">${inline(String(doc.why))}</p>` : ''}${findFirst}
       ${nxt ? `<div class="next doc-pick">
         <div class="doc-name"><span>If it doesn't settle &rarr; <strong>${esc(String(nxt.name))}</strong></span>${infoBtn(nxt)}</div>${aboutBox(nxt)}
-        ${nxt.when ? `<p class="when">${inline(String(nxt.when))}</p>` : ''}</div>` : ''}
+        ${nxt.when ? `<p class="when">${inline(String(nxt.when))}</p>` : ''}${findNext}</div>` : ''}
       ${guide ? `<div class="next doc-pick">
         <div class="doc-name"><span><strong>${esc(String(guide.name))}</strong>, ${esc(String(guide.label))}, can also guide you while you arrange this.</span>${infoBtn(guide)}</div>${ownBox(guide)}</div>` : ''}</aside>`;
   }
@@ -572,6 +618,27 @@ document.addEventListener('click', (e) => {
   const p = b.closest('.doc-pick') && b.closest('.doc-pick').querySelector('.about'); if (!p) return;
   p.hidden = !p.hidden; b.setAttribute('aria-expanded', String(!p.hidden));
 });
+/* Find near you: one search per tap. The box is marked busy before anything else happens, so a second tap
+   (or a double-click) is ignored; the server also joins repeated searches into one, and the answer is cached. */
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest && e.target.closest('.find-btn, .find-link'); if (!b) return;
+  const box = b.closest('.find'); if (!box || box.dataset.busy) return;
+  if (!myPin()) { askPincode(); return; }
+  box.dataset.busy = '1'; b.disabled = true;
+  const out = box.querySelector('.found'), label = b.textContent; b.textContent = 'Looking nearby…'; out.innerHTML = '';
+  try {
+    const data = await api(`/doctors/nearby?visitor_id=${visitorId}&doctor=${encodeURIComponent(box.dataset.key)}`);
+    out.innerHTML = renderFound(data); b.hidden = true;
+  } catch (err) {
+    if (err.message !== 'auth') out.innerHTML = `<p class="found-err">${esc(err.message)}</p>`;
+    b.textContent = label;
+  } finally {
+    delete box.dataset.busy; b.disabled = false;
+  }
+});
+function refreshFindButtons() {   // after the pincode is saved, buttons already on screen show it
+  document.querySelectorAll('.find-btn').forEach((b) => { const box = b.closest('.find'); if (!box.dataset.busy && !b.hidden) b.textContent = findLabel(box.dataset.name); });
+}
 input.addEventListener('input', () => { autosize(); send.disabled = !input.value.trim(); });
 input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('composer').requestSubmit(); } });
 document.querySelectorAll('.chip').forEach((c) => c.addEventListener('click', () => sendMessage(c.textContent)));
@@ -677,9 +744,10 @@ buildDocs($('p-docs')); buildDocs($('m-docs'));
 ['p-dob', 'p-sex'].forEach((id) => $(id).addEventListener('input', () => refreshDocs($('p-docs'), $('p-dob').value, $('p-sex').value, null)));
 const memberWho = () => $('m-name').value.trim().split(/\s+/)[0] || 'this person';
 ['m-dob', 'm-sex', 'm-name'].forEach((id) => $(id).addEventListener('input', () => { if (!editing) refreshDocs($('m-docs'), $('m-dob').value, $('m-sex').value, memberWho()); }));
+let needsPincode = false;
 async function loadFamily() {
   const data = await api(`/family?visitor_id=${visitorId}`);
-  family = data.members; renderFamily();
+  family = data.members; needsPincode = !!data.needs_pincode; renderFamily();
   return data.needs_profile;
 }
 async function enter() {                       // after a good password: profile first (once), then the chat
@@ -688,15 +756,23 @@ async function enter() {                       // after a good password: profile
   catch (e) { if (e.message === 'auth') throw e; showBanner(e.message); }   // e.g. profiles not set up yet: carry on with the chat
   if (needsProfile) { showProfile(); return; }
   await loadHistory();
+  if (needsPincode && !store.get('fl_pin_asked')) { store.set('fl_pin_asked', '1'); askPincode(); }   // a family that joined before pincodes: asked once (the Find buttons ask again when it matters)
+}
+/* The pincode lives on your own profile: first-visit form, or "Edit your profile" (opened here when it is missing). */
+function askPincode() {
+  const me = family.find((m) => m.relation === 'self'); if (!me) return;
+  openEdit(me);
+  $('m-who').textContent = 'Please add your pincode, so I can find doctors near you.';
+  $('m-pincode').focus();
 }
 const profileBody = (relation, pre) => JSON.stringify({
   visitor_id: visitorId, relation, name: $(pre + '-name').value, dob: $(pre + '-dob').value, sex: $(pre + '-sex').value,
   conditions: $(pre + '-conditions').value, medicines: $(pre + '-medicines').value, allergies: $(pre + '-allergies').value,
-  doctors: docsPayload($(pre + '-docs')),
+  doctors: docsPayload($(pre + '-docs')), ...(pre === 'p' ? { pincode: $('p-pincode').value } : {}),
 });
 const editBody = () => JSON.stringify({
   visitor_id: visitorId, conditions: $('m-conditions').value, medicines: $('m-medicines').value, allergies: $('m-allergies').value,
-  doctors: docsPayload($('m-docs')),
+  doctors: docsPayload($('m-docs')), ...(editing && editing.relation === 'self' ? { pincode: $('m-pincode').value } : {}),   // others: left out, so unchanged
 });
 /* Save a profile once: the button is locked while the request is out (a second click can't send a second one),
    and the saved person from the reply goes straight into the sidebar (added, or replaced after an edit). */
@@ -708,7 +784,7 @@ async function saveMember(form, send, errorBox, busyLabel) {
     const saved = await send();
     const i = family.findIndex((m) => m.id === saved.id);
     if (i >= 0) family[i] = saved; else family.push(saved);
-    renderFamily();
+    renderFamily(); refreshFindButtons();
     return true;
   } catch (err) {
     if (err.message !== 'auth') errorBox.textContent = err.message;
@@ -734,14 +810,18 @@ function setIdentity(on) {   // relation, name, date of birth, gender: shown whe
   $('m-identity').hidden = !on;
   $('m-identity').querySelectorAll('input, select').forEach((el) => { el.disabled = !on; });
 }
+function setPincode(on) {   // asked only on your own profile; hidden, disabled and not required everywhere else (a hidden required field would block Save)
+  $('m-pin-field').hidden = !on; $('m-pincode').disabled = !on; $('m-pincode').required = on;
+}
 function openAdd() {
-  editing = null; $('m-form').reset(); resetDocs($('m-docs')); $('m-docs').hidden = true; setIdentity(true);
+  editing = null; $('m-form').reset(); resetDocs($('m-docs')); $('m-docs').hidden = true; setIdentity(true); setPincode(false);
   $('add-title').textContent = 'Add a family member'; $('m-who').hidden = true; $('m-submit').textContent = 'Add';
   $('m-more').open = false; $('m-error').textContent = ''; closeDrawer(); modal.classList.add('open'); $('m-relation').focus();
 }
 function openEdit(m) {
   editing = m; $('m-form').reset(); resetDocs($('m-docs')); setIdentity(false);
   const me = m.relation === 'self';
+  setPincode(me); $('m-pincode').value = m.pincode || '';
   $('add-title').textContent = me ? 'Edit your profile' : `Edit ${m.name}`;
   $('m-who').textContent = `${me ? 'You' : RELATION_LABEL[m.relation] || m.relation} · ${m.age_text}`; $('m-who').hidden = false;
   $('m-conditions').value = m.conditions || ''; $('m-medicines').value = m.medicines || ''; $('m-allergies').value = m.allergies || '';
