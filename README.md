@@ -35,6 +35,7 @@ Open http://127.0.0.1:8000. Create the table once by running `schema.sql` in the
 - `prompts.py` holds the doctor's instructions: one prompt for the questions, one for the final assessment.
 - `main.py` keeps each visitor's chat in Postgres and decides when to stop asking (`CONFIDENCE_TO_CONCLUDE`, `MIN_QUESTIONS`, `MAX_QUESTIONS`).
 - `static/index.html` is the chat page.
+- `reviews.py` reads the Google reviews of the doctors `places.py` finds (up to 20 per place, text and stars only) and boosts the ones whose reviews mention the patient's likely conditions. Claude Haiku writes the search words from the condition names (`prompts.py`: `TERMS_PROMPT`); the matching is plain dictionary matching, and it only ever moves doctors up (more matching reviews and more different words count for more; no matches costs nothing). The weights (`TIER_WEIGHT`, `MAX_BONUS`, `SOFTNESS`) are at the top of the file.
 - `places.py` finds doctors near the account holder's pincode (Google Maps through Serper.dev): it filters and ranks the listings, caches them in `nearby_cache`, and makes sure a double press is one search. The Serper call is one function, so another provider can replace it.
 
 Adding a pincode to a database that already has `members`: run the `alter table ... add column pincode` line from `schema.sql` (and create `nearby_cache`) **before** deploying this code.

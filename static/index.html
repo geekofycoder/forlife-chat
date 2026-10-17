@@ -147,6 +147,7 @@
   .place-name { font: 600 16px/1.3 var(--font-display); color: var(--ink-900); }
   .place-meta { margin-top: 2px; font-size: 14px; color: var(--ink-500); }
   .place-meta .stars { font-weight: 600; color: #9a5b0b; }
+  .place-match { margin-top: 4px; font-size: 13.5px; color: var(--green-900); }
   .place-addr { margin-top: 4px; font-size: 14px; color: var(--ink-700); }
   .place-actions { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 6px; }
   .place-actions a { padding: 4px 0; font: 600 14.5px/1.3 var(--font-sans); color: var(--green-700); text-decoration: none; }
@@ -414,7 +415,7 @@ async function api(path, options = {}) {
 }
 
 /* ---- rendering: everything is escaped first, then a tiny safe subset (bold, lists, paragraphs) ---- */
-const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');   // quotes too: esc() also fills double-quoted attributes
 const inline = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 function renderMarkdown(text) {
   const out = []; let para = [], list = null;
@@ -486,7 +487,7 @@ const ownBox = (o) => `<div class="about" hidden>${o.phone ? `<a class="tel" hre
 const myPin = () => { const me = family.find((m) => m.relation === 'self'); return me && me.pincode ? String(me.pincode) : ''; };
 const article = (name) => (/^[AEIO]/i.test(name) ? 'an' : 'a');
 const findLabel = (name) => `Find ${article(name)} ${name} near ${myPin() || 'you'}`;
-const findBox = (key, name) => key ? `<div class="find" data-key="${esc(String(key))}" data-name="${esc(String(name))}"><button type="button" class="find-btn">${esc(findLabel(String(name)))}</button><div class="found" aria-live="polite"></div></div>` : '';
+const findBox = (key, name, conds) => key ? `<div class="find" data-key="${esc(String(key))}" data-name="${esc(String(name))}"${conds ? ` data-c="${esc(conds)}"` : ''}><button type="button" class="find-btn">${esc(findLabel(String(name)))}</button><div class="found" aria-live="polite"></div></div>` : '';
 const findOwn = (key, own) => key ? `<div class="find" data-key="${esc(String(key))}"><button type="button" class="find-link">Not able to reach ${esc(String(own.name))}? Find nearby</button><div class="found" aria-live="polite"></div></div>` : '';
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 function renderFound(d) {
@@ -496,10 +497,11 @@ function renderFound(d) {
   const place = (p) => {
     const phone = /^\+91\d{10}$/.test(String(p.phone || '')) ? String(p.phone) : '', lat = num(p.lat), lng = num(p.lng), km = num(p.km), rating = num(p.rating), count = num(p.count);
     const meta = [rating !== null ? `<span class="stars">&#9733; ${rating.toFixed(1)}</span>${count !== null ? ` (${plural(count, 'rating')})` : ''}` : '', km !== null ? `${km < 0.1 ? 'under 0.1' : km.toFixed(1)} km from ${pin}` : ''].filter(Boolean).join(' &middot; ');
-    return `<div class="place"><div class="place-name">${esc(String(p.name || ''))}</div>${meta ? `<div class="place-meta">${meta}</div>` : ''}${p.address ? `<div class="place-addr">${esc(String(p.address))}</div>` : ''}
+    const mt = p.match && num(p.match.reviews) > 0 ? `<div class="place-match">${num(p.match.reviews)} of ${plural(num(p.match.of) || 0, 'review')} mention ${list(p.match.terms).slice(0, 3).map((t) => esc(String(t))).join(', ')}</div>` : '';
+    return `<div class="place"><div class="place-name">${esc(String(p.name || ''))}</div>${meta ? `<div class="place-meta">${meta}</div>` : ''}${mt}${p.address ? `<div class="place-addr">${esc(String(p.address))}</div>` : ''}
       <div class="place-actions">${phone ? `<a href="tel:${phone}">Call ${esc(fmtPhone(phone))}</a>` : ''}${lat !== null && lng !== null ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}" target="_blank" rel="noopener">Directions</a>` : ''}</div></div>`;
   };
-  return rs.map(place).join('') + `<p class="found-note">From Google Maps listings near ${pin}${d.stale ? ', saved a little while ago, so details may have changed' : ''}. Please check timings before you go. ForLife doesn't recommend or vouch for these places.</p>`;
+  return rs.map(place).join('') + `<p class="found-note">From Google Maps listings near ${pin}${d.stale ? ', saved a little while ago, so details may have changed' : ''}. ${rs.some((p) => p.match && num(p.match.reviews) > 0) ? ' Places whose reviews mention what you may have are listed higher.' : ''} Please check timings before you go. ForLife doesn't recommend or vouch for these places.</p>`;
 }
 
 function renderAssistant(content) {
@@ -527,8 +529,10 @@ function renderAssistant(content) {
       ? `<div class="doc-name"><h4>${esc(String(own.name))}</h4><span class="role">&middot; ${esc(String(own.label))}</span>${infoBtn(own)}</div>${ownBox(own)}`
       : `<div class="doc-name"><h4>${esc(String(doc.name))}</h4>${infoBtn(doc)}</div>${aboutBox(doc)}`;
     // A way to find them nearby, for each doctor we point to that they don't already have. Not on an emergency: the emergency message stays the only instruction.
-    const findFirst = emergency ? '' : own ? findOwn(doc.specialty, own) : findBox(doc.specialty, doc.name);
-    const findNext = emergency || !nxt ? '' : findBox(nxt.specialty, nxt.name);
+    // The conditions go with the search so their reviews can be read for them (not for the "Not able to reach" link: they have their own doctor).
+    const cd = JSON.stringify(conditions.slice(0, 5).map((c) => ({ t: String(c.likelihood || ''), n: String(c.name || '').slice(0, 120) })));
+    const findFirst = emergency ? '' : own ? findOwn(doc.specialty, own) : findBox(doc.specialty, doc.name, cd);
+    const findNext = emergency || !nxt ? '' : findBox(nxt.specialty, nxt.name, cd);
     html += `<aside class="doctor" aria-label="Which doctor to see"><div class="box-title">Who to see</div>
       <div class="doc-pick">${nxt ? '<div class="start">Start with</div>' : ''}${first}</div>
       ${doc.why ? `<p class="why">${inline(String(doc.why))}</p>` : ''}${findFirst}
@@ -627,7 +631,7 @@ document.addEventListener('click', async (e) => {
   box.dataset.busy = '1'; b.disabled = true;
   const out = box.querySelector('.found'), label = b.textContent; b.textContent = 'Looking nearby…'; out.innerHTML = '';
   try {
-    const data = await api(`/doctors/nearby?visitor_id=${visitorId}&doctor=${encodeURIComponent(box.dataset.key)}`);
+    const data = await api(`/doctors/nearby?visitor_id=${visitorId}&doctor=${encodeURIComponent(box.dataset.key)}${box.dataset.c ? '&conditions=' + encodeURIComponent(box.dataset.c) : ''}`);
     out.innerHTML = renderFound(data); b.hidden = true;
   } catch (err) {
     if (err.message !== 'auth') out.innerHTML = `<p class="found-err">${esc(err.message)}</p>`;

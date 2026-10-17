@@ -268,3 +268,33 @@ CONCLUSION_SCHEMA = {
     "required": ["headline", "conditions", "do_now", "doctor"],
     "additionalProperties": False,
 }
+
+# The words used to look for a condition in Google reviews of doctors (places.py / reviews.py). Written by a small, fast model from the
+# condition names only. The code then drops anything unsafe or too generic, so this prompt only has to make the words good.
+TERMS_PROMPT = """\
+A patient may have each condition below. We will search Google reviews of doctors for the words people use when they say they were seen \
+or treated for it. For each condition (same order) give up to 10 short lowercase search terms: the medical name, everyday names a patient \
+would say, the organ or body-part word people use for it (for example "gastric" for stomach acid trouble), and common spelling variants \
+(with and without a space, such as "gall bladder" and "gallbladder").
+
+Do NOT include tests, scans or checks (endoscopy, ultrasound, blood test, stool test): doctors do those for many conditions, so a review \
+that names one does not tell us the condition. Include an operation only if it is THE treatment for this exact condition (cholecystectomy \
+for gallstones). No generic words on their own (pain, doctor, treatment, problem, stomach, medicine, surgery), and no medical specialty \
+names (gastro, cardio, ortho). One to three words each."""
+
+TERMS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "conditions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"terms": {"type": "array", "items": {"type": "string"}}},
+                "required": ["terms"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["conditions"],
+    "additionalProperties": False,
+}

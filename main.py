@@ -23,7 +23,7 @@ from zoneinfo import ZoneInfo
 
 import anthropic
 import asyncpg
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -31,9 +31,10 @@ from pydantic import BaseModel, Field
 import doctors
 import family
 import places
+import reviews
 from prompts import (
     CONCLUSION_PROMPT, CONCLUSION_SCHEMA, CONFIDENCE_TO_CONCLUDE, EMERGENCY_NOTE, GROUP_RULES, GROUP_TITLES,
-    INTERVIEW_PROMPT, INTERVIEW_SCHEMA, REOPEN_BELOW,
+    INTERVIEW_PROMPT, INTERVIEW_SCHEMA, REOPEN_BELOW, TERMS_PROMPT, TERMS_SCHEMA,
 )
 
 log = logging.getLogger("forlife")
@@ -46,6 +47,7 @@ STATIC = Path(__file__).parent / "static"
 MODEL = os.environ.get("CHAT_MODEL", "claude-sonnet-5-5")
 EFFORT = os.environ.get("CHAT_EFFORT", "low")                 
 INTERVIEW_EFFORT = os.environ.get("INTERVIEW_EFFORT", EFFORT)
+TERMS_MODEL = os.environ.get("TERMS_MODEL", "claude-haiku-5-5")   # writes the words used to look for conditions in reviews (a small, quick job)
 REQUIRED = ["DATABASE_URL", "ANTHROPIC_API_KEY", "SHARED_PASSWORD"]
 TRY_AGAIN = "I am facing some internal issues, don't worry I will come back to you and help you with your cure!"
 # CONFIDENCE_TO_CONCLUDE (70) and REOPEN_BELOW (60) live in prompts.py, next to the prompt text that quotes them.
@@ -226,12 +228,12 @@ def decide(stage: str, asked_before: int, iv: dict) -> tuple[str, str]:
 
 # ---------- talking to Claude ----------
 
-async def ask_claude(system: str, messages: list, schema: dict, effort: str, max_tokens: int, ok):
+async def ask_claude(system: str, messages: list, schema: dict, effort: str, max_tokens: int, ok, model: str | None = None):
     """One structured call. Returns the parsed answer, or None if Claude declined. Raises 502 if the answer is unusable."""
     t0 = time.time()
     try:
         resp = await app.state.claude.messages.create(
-            model=MODEL,
+            model=model or MODEL,
             max_tokens=max_tokens,  # thinking is always on for this model and shares this budget with the answer
             system=system,
             output_config={"effort": effort, "format": {"type": "json_schema", "schema": schema}},
@@ -432,9 +434,49 @@ async def edit_member(member_id: uuid.UUID, body: EditIn):
     return family.public_member(row, today)
 
 
+_terms_memo: dict = {}   # condition name -> the words used to look for it in reviews (written once per name while the server runs)
+
+
+async def review_terms(names: list) -> list:
+    """The search words for each condition name, written by a small model. Any failure gives the name's own words instead, never an error."""
+    todo = [n for n in dict.fromkeys(names) if n.lower() not in _terms_memo]
+    if todo:
+        try:
+            body = "\n".join(f"{i + 1}) {n}" for i, n in enumerate(todo))
+            data = await ask_claude(TERMS_PROMPT, [{"role": "user", "content": body}], TERMS_SCHEMA, "low", 1500,
+                                    lambda d: isinstance(d.get("conditions"), list), model=TERMS_MODEL)
+            for n, c in zip(todo, data["conditions"]):
+                if isinstance(c, dict):
+                    _terms_memo[n.lower()] = reviews.clean_terms(c.get("terms"))
+            log.info("review terms written in %ss for %d condition(s)", data["_seconds"], len(todo))
+        except Exception as e:   # includes the HTTPException ask_claude raises
+            log.warning("review terms not written, using the names' own words: %r", e)
+    if len(_terms_memo) > 500:
+        _terms_memo.clear()
+    return [_terms_memo.get(n.lower()) or reviews.terms_from_name(n) for n in names]
+
+
+def read_conditions(raw: str) -> list:
+    """The assessment's conditions as the page sent them ([{t: tier, n: name}]), kept only if they look right (at most 5)."""
+    if not isinstance(raw, str):
+        return []
+    try:
+        items = json.loads(raw) if raw else []
+    except ValueError:
+        return []
+    out = []
+    for x in items[:5] if isinstance(items, list) else []:
+        if isinstance(x, dict) and x.get("t") in reviews.TIER_WEIGHT and isinstance(x.get("n"), str):
+            name = family.clean_text(x["n"])[:120]
+            if name:
+                out.append({"tier": x["t"], "name": name})
+    return out
+
+
 @app.get("/doctors/nearby", dependencies=[Depends(check_password)])
-async def doctors_nearby(visitor_id: uuid.UUID, doctor: str):
-    """The best two doctors or clinics of this kind near the account holder's pincode (looked up here, never taken from the page)."""
+async def doctors_nearby(visitor_id: uuid.UUID, doctor: str, conditions: str = Query(default="", max_length=1500)):
+    """The best two doctors or clinics of this kind near the account holder's pincode (looked up here, never taken from the page).
+    With `conditions` (the assessment's, as JSON) their reviews are read and doctors whose reviews mention those conditions move up."""
     key = doctor.strip().lower()
     if key not in doctors.DOCTORS or key not in places.SEARCH_PHRASE:
         raise HTTPException(422, "I can't look that kind of doctor up yet.")
@@ -442,7 +484,7 @@ async def doctors_nearby(visitor_id: uuid.UUID, doctor: str):
     if not pincode:
         raise HTTPException(409, "Please add your pincode to your profile first, and I'll find doctors near you.")
     try:
-        found = await places.find_nearby(db_run, pincode, key)
+        found = await places.find_nearby(db_run, pincode, key, conditions=read_conditions(conditions), terms_for=review_terms)
     except places.NotConfigured:
         raise HTTPException(503, "Finding doctors near you isn't set up yet. Please tell whoever runs this app.")
     except places.ProviderError as e:
