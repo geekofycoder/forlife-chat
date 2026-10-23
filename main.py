@@ -32,9 +32,10 @@ import doctors
 import family
 import places
 import reviews
+import shop
 from prompts import (
     CONCLUSION_PROMPT, CONCLUSION_SCHEMA, CONFIDENCE_TO_CONCLUDE, EMERGENCY_NOTE, GROUP_RULES, GROUP_TITLES,
-    INTERVIEW_PROMPT, INTERVIEW_SCHEMA, REOPEN_BELOW, TERMS_PROMPT, TERMS_SCHEMA,
+    HELP_PROMPT, INTERVIEW_PROMPT, INTERVIEW_SCHEMA, REOPEN_BELOW, TERMS_PROMPT, TERMS_SCHEMA,
 )
 
 log = logging.getLogger("forlife")
@@ -469,7 +470,7 @@ def read_conditions(raw: str) -> list:
         if isinstance(x, dict) and x.get("t") in reviews.TIER_WEIGHT and isinstance(x.get("n"), str):
             name = family.clean_text(x["n"])[:120]
             if name:
-                out.append({"tier": x["t"], "name": name})
+                out.append({"tier": x["t"], "name": name, "risk": x["r"] if x.get("r") in ("low", "moderate", "immediate") else ""})
     return out
 
 
@@ -491,6 +492,89 @@ async def doctors_nearby(visitor_id: uuid.UUID, doctor: str, conditions: str = Q
         log.error("nearby search failed: %s", e)
         raise HTTPException(502, "I couldn't look up doctors near you just now. Please try again in a moment.")
     return {"pincode": pincode, "doctor": doctors.DOCTORS[key]["name"], "results": found["results"], "stale": found["source"] == "stale"}
+
+
+_help_memo: dict = {}   # (condition names, allowed items, sex) -> the items picked (so the same assessment isn't asked about twice)
+
+
+async def pick_help_items(conds: list, age_months, sex) -> list:
+    """Up to 3 item keys from shop.ITEMS for this patient. The model only chooses among the items allowed for their age; any failure gives none."""
+    names = [c["name"] for c in conds]
+    allowed = [k for k, it in shop.ITEMS.items() if shop.age_ok(it, age_months) and shop.condition_ok(it, names)]
+    if not allowed:
+        return []
+    memo_key = (tuple(c["name"].lower() for c in conds), tuple(allowed), sex)
+    if memo_key in _help_memo:
+        return _help_memo[memo_key]
+    who = "age unknown" if age_months is None else (f"{age_months} months old" if age_months < 36 else f"{age_months // 12} years old")
+    body = "Likely conditions:\n" + "\n".join(f"- {c['tier'].replace('_', ' ')}: {c['name']} (risk: {c['risk']})" for c in conds) + f"\nPatient: {who}, {sex or 'sex unknown'}\n\nAllowed items:\n" + \
+        "\n".join(f"{k}: {shop.ITEMS[k]['name']} (use: {shop.ITEMS[k]['use']})" for k in allowed)
+    schema = {"type": "object", "properties": {"items": {"type": "array", "items": {"type": "string", "enum": allowed}}}, "required": ["items"], "additionalProperties": False}
+    try:
+        data = await ask_claude(HELP_PROMPT, [{"role": "user", "content": body}], schema, "low", 600, lambda d: isinstance(d.get("items"), list), model=TERMS_MODEL)
+    except Exception as e:   # includes the HTTPException ask_claude raises
+        log.warning("help items not picked: %r", e)
+        return []
+    keys = list(dict.fromkeys(k for k in data["items"] if k in allowed))[: shop.MAX_ITEMS]
+    if len(_help_memo) > 300:
+        _help_memo.clear()
+    _help_memo[memo_key] = keys
+    log.info("help items %s for %s in %ss", keys, who, data["_seconds"])
+    return keys
+
+
+@app.get("/help/nearby", dependencies=[Depends(check_password)])
+async def help_nearby(visitor_id: uuid.UUID, conditions: str = Query(default="", max_length=1500), patient: str = Query(default="", max_length=60)):
+    """Simple self-care items (ORS, a heating pad...) that may help with the assessment's conditions, as example listings near the account
+    holder's pincode (looked up here). A small model picks from a fixed list; code removes what is unsuitable for the patient's age."""
+    conds = read_conditions(conditions)
+    if not conds:
+        raise HTTPException(422, "I need the conditions to look for items that may help.")
+    pincode = await db_run("fetchval", "select pincode from members where visitor_id = $1 and relation = 'self'", visitor_id)
+    if not pincode:
+        raise HTTPException(409, "Please add your pincode to your profile first, and I'll look for items near you.")
+    if shop.too_risky(conds):   # a likely urgent condition, or a risk we weren't told: no items (the page hides the box by the same rule)
+        return {"pincode": pincode, "items": [], "reason": "urgent"}
+    if shop.PREGNANCY.search(" ".join(c["name"] for c in conds)):
+        return {"pincode": pincode, "items": [], "reason": "pregnancy"}   # nothing here is meant for pregnancy: leave it to the doctor
+    members = await load_members(visitor_id)
+    who = family.match_patient(members, patient)
+    age = family.age_parts(who["dob"], datetime.now(IST).date())[1] if who else None
+    keys = await pick_help_items(conds, age, who["sex"] if who else None)
+    if not keys:
+        return {"pincode": pincode, "items": [], "reason": "none"}
+    try:
+        items = await shop.find_products(db_run, pincode, keys)
+    except places.NotConfigured:
+        raise HTTPException(503, "Looking for items near you isn't set up yet. Please tell whoever runs this app.")
+    except places.ProviderError as e:
+        log.error("shop search failed: %s", e)
+        raise HTTPException(502, "I couldn't look up items near you just now. Please try again in a moment.")
+    return {"pincode": pincode, "items": [{k: v for k, v in i.items() if k != "source"} for i in items], "stale": any(i["source"] == "stale" for i in items),
+            "reason": "" if items else "none"}
+
+
+DOORS = ("open", "vera", "specialist", "close")   # the "blue door" test: which button was tapped (see schema.sql, table interest_events)
+
+
+class InterestIn(BaseModel):
+    visitor_id: uuid.UUID
+    door: str = Field(max_length=20)
+
+
+@app.post("/interest", dependencies=[Depends(check_password)])
+async def interest(body: InterestIn):
+    """Counts a tap on a 'coming soon' door: which door, by which visitor (a random id), when. Always logged; stored too if the table exists."""
+    if body.door not in DOORS:
+        raise HTTPException(422, "Unknown door.")
+    log.info("interest door=%s visitor=%s", body.door, str(body.visitor_id)[:8])
+    try:
+        await app.state.db.execute("insert into interest_events (visitor_id, door) values ($1, $2)", body.visitor_id, body.door)
+    except asyncpg.UndefinedTableError:
+        pass   # the table is optional: without it the taps are only in the log
+    except (asyncpg.PostgresError, asyncpg.InterfaceError, TimeoutError, ConnectionError) as e:
+        log.warning("interest not stored: %r", e)   # counting must never break the page
+    return {"ok": True}
 
 
 @app.get("/", include_in_schema=False)

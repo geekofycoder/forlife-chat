@@ -67,3 +67,15 @@ create table public.nearby_cache (
   primary key (pincode, doctor_type)
 );
 alter table public.nearby_cache enable row level security;
+
+-- "Blue door" test: counts taps on the 'coming soon' buttons (open, vera, specialist, close). Optional: without this table the taps
+-- are only written to the server log. Count them with:
+--   select door, count(*) as taps, count(distinct visitor_id) as people from public.interest_events group by door;
+create table public.interest_events (
+  id          bigint generated always as identity primary key,
+  visitor_id  uuid        not null,
+  door        text        not null check (door in ('open', 'vera', 'specialist', 'close')),
+  created_at  timestamptz not null default now()
+);
+create index interest_events_door_idx on public.interest_events (door, created_at);
+alter table public.interest_events enable row level security;

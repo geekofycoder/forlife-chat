@@ -1,0 +1,256 @@
+/* ForLife "blue door": a fake-door test for talking with Vera or a ForLife specialist.
+   Paste after the page's own styles. Every class and id starts with bd-.
+   Relies on the page tokens: --deep --green-100 --green-900 --mint --cream --ink-700 --line
+   --radius-pill --font-display --font-sans. */
+:root {
+  --bd-ink-soft: #4d5a55;                 /* sublines on cream: 6.7:1 (--ink-500 is 4.48:1 there) */
+  --bd-ease: cubic-bezier(.2, .8, .2, 1);
+  --bd-glass-top: rgba(250, 246, 238, .20);
+  --bd-glass-mid: rgba(250, 246, 238, .07);
+  --bd-glass-low: rgba(159, 217, 198, .14);
+  --bd-glass-solid: #2b5a4d;              /* opaque stand-in for reduced transparency */
+  --bd-rim: linear-gradient(160deg, rgba(255, 255, 255, .85) 0%, rgba(255, 255, 255, .16) 32%, rgba(255, 255, 255, .05) 58%, rgba(159, 217, 198, .75) 100%);
+  --bd-disc-vera: radial-gradient(120% 120% at 50% 12%, #d3f0e6 0%, #9fd9c6 45%, #5cb99c 100%);
+  --bd-disc-specialist: radial-gradient(120% 120% at 50% 12%, #11826a 0%, #035c47 50%, #04382b 100%);
+  --bd-radius-sheet: 28px;
+}
+
+/* ---------- the glass pane in the header ---------- */
+.bd-pane {
+  position: relative; isolation: isolate; flex: none;
+  display: inline-flex; align-items: center; gap: 9px;
+  box-sizing: border-box; height: 44px; margin: 0; padding: 0 16px 0 6px;
+  border: 1px solid transparent;          /* becomes a real edge in forced-colours mode */
+  border-radius: var(--radius-pill);
+  font: 600 15px/1 var(--font-sans); letter-spacing: .005em; color: var(--cream);
+  background: linear-gradient(180deg, var(--bd-glass-top) 0%, var(--bd-glass-mid) 55%, var(--bd-glass-low) 100%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%); backdrop-filter: blur(14px) saturate(160%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .32),          /* top edge catches the light */
+    inset 0 -1px 0 rgba(159, 217, 198, .45),         /* light leaving through the bottom edge */
+    inset 0 -12px 14px -12px rgba(159, 217, 198, .6),
+    0 1px 1px rgba(0, 0, 0, .35),
+    0 4px 10px -4px rgba(0, 0, 0, .6);               /* stays inside the 60px bar */
+  cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  transition: transform .18s var(--bd-ease);
+}
+/* specular sheen along the top edge, strongest at the top left. It sits above the two faces,
+   so they read as being under the glass; the label sits above it. */
+.bd-pane::before {
+  content: ""; position: absolute; z-index: 1; inset: 1px 12px auto 8px; height: 48%;
+  border-radius: 999px 999px 40% 40%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .34), rgba(255, 255, 255, 0));
+  -webkit-mask: linear-gradient(90deg, #000 0%, rgba(0, 0, 0, .55) 45%, transparent 90%);
+  mask: linear-gradient(90deg, #000 0%, rgba(0, 0, 0, .55) 45%, transparent 90%);
+  transition: transform .35s var(--bd-ease);
+  pointer-events: none;
+}
+/* rim light: a 1px gradient ring, bright top left, mint bottom right */
+.bd-pane::after {
+  content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 1px;
+  background: var(--bd-rim);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  pointer-events: none;
+}
+.bd-faces { display: inline-flex; flex: none; }
+.bd-face {
+  position: relative; display: block; width: 30px; height: 30px; overflow: hidden; border-radius: 50%;
+  box-shadow: 0 0 0 1.5px rgba(250, 246, 238, .85), 0 2px 5px rgba(0, 0, 0, .3);
+}
+.bd-face + .bd-face { margin-left: -8px; }
+.bd-face--vera { background: #9fd9c6; }
+.bd-face--specialist { background: #035c47; }
+/* beats the page's `header img { height: 28px }` (0,2,1 vs 0,0,2) */
+.bd-pane .bd-face img {
+  position: absolute; display: block; left: -55%; top: -12%;
+  width: 210%; max-width: none; height: auto;
+}
+.bd-pane-label { position: relative; z-index: 2; white-space: nowrap; text-shadow: 0 1px 1px rgba(0, 0, 0, .25); }
+@media (hover: hover) {
+  .bd-pane:hover { --bd-glass-top: rgba(250, 246, 238, .26); --bd-glass-low: rgba(159, 217, 198, .22); }
+  .bd-pane:hover::before { transform: translateX(14px); }
+}
+.bd-pane:active { transform: scale(.96); }
+.bd-pane:focus-visible { outline: 2px solid var(--mint); outline-offset: 3px; }   /* 8.2:1 on --deep */
+/* very narrow phones (under 360px): faces only; the label stays as the button's name */
+@media (max-width: 359px) {
+  .bd-pane { padding-right: 6px; }
+  .bd-pane-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+}
+/* only offer the door inside the chat, not on the password or profile screens */
+body[data-view]:not([data-view="chat"]) .bd-pane { display: none; }
+
+/* ---------- the dialog ---------- */
+.bd-lock, .bd-lock body { overflow: hidden; }
+.bd-dialog {
+  position: fixed; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none;
+  margin: 0; padding: 0; border: 0; background: transparent; color: var(--ink-700);
+  overflow: hidden; overscroll-behavior: contain;
+}
+.bd-dialog::backdrop { background: rgba(2, 46, 34, .42); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+.bd-dialog[open]::backdrop { animation: bd-fade .2s ease both; }
+.bd-dialog [hidden] { display: none !important; }
+.bd-dialog :focus-visible { outline: 2px solid var(--green-900); outline-offset: 3px; }
+
+.bd-panel {
+  position: absolute; top: var(--bd-top, 72px); right: var(--bd-right, 16px);
+  box-sizing: border-box; width: min(540px, calc(100vw - 32px));
+  max-height: calc(100dvh - var(--bd-top, 72px) - 16px); overflow-y: auto; overscroll-behavior: contain;
+  padding: 18px 22px 24px; border-radius: var(--bd-radius-sheet);
+  background: var(--cream);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 0 0 1px rgba(4, 56, 43, .07),
+    0 28px 60px -14px rgba(2, 46, 34, .5),
+    0 8px 20px rgba(2, 46, 34, .16);
+  transform-origin: calc(100% - 70px) 0;
+}
+.bd-dialog[open] .bd-panel { animation: bd-pop .26s var(--bd-ease) both; }
+.bd-dialog.bd-closing .bd-panel { animation: bd-out .16s ease-in both; }
+.bd-dialog.bd-closing::backdrop { animation: bd-fade .16s ease-in reverse both; }
+
+.bd-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.bd-title {
+  margin: 8px 0 0 2px; font: 600 24px/1.2 var(--font-display); letter-spacing: -.01em;
+  color: var(--deep); text-wrap: balance;
+}
+.bd-title:focus, .bd-soon-title:focus { outline: none; }  /* focus is moved here by script, never by Tab */
+.bd-x {
+  flex: none; display: grid; place-items: center; width: 44px; height: 44px; margin: -4px -10px 0 auto;
+  padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--deep); cursor: pointer;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+@media (hover: hover) { .bd-x:hover { background: var(--green-100); } }
+
+/* the two doors */
+.bd-choose { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+.bd-door {
+  --bd-d: clamp(112px, 29vw, 160px);      /* circle diameter */
+  display: flex; flex-direction: column; align-items: center; min-width: 0;
+  margin: 0; padding: 6px 6px 12px; border: 0; border-radius: 22px;
+  background: transparent; color: inherit; font: inherit; text-align: center;
+  cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+/* line the two doors up row by row (circle, name, subline), even when one name wraps */
+@supports (grid-template-rows: subgrid) {
+  .bd-choose { grid-template-rows: auto auto auto; }
+  .bd-door { display: grid; grid-row: span 3; grid-template-rows: subgrid; justify-items: center; align-items: start; row-gap: 0; }
+  .bd-door .bd-name { align-self: end; }
+}
+.bd-name { margin-top: 10px; font: 600 19px/1.22 var(--font-display); letter-spacing: -.005em; color: var(--deep); text-wrap: balance; }
+.bd-sub { margin-top: 5px; max-width: 24ch; font: 400 15px/1.4 var(--font-sans); color: var(--bd-ink-soft); text-wrap: pretty; }
+
+/* a figure rising out of its circle.
+   Image contract: 10:13 canvas; the circle is 90% of its width, centred, touching the bottom edge.
+   Above the circle's centre line everything shows (head, hair); below it, only what is inside the circle. */
+.bd-stage { position: relative; display: block; flex: none; width: calc(var(--bd-d) / .9); aspect-ratio: 400 / 520; transition: transform .18s var(--bd-ease); }
+.bd-disc, .bd-lip { position: absolute; bottom: 0; left: 5%; width: 90%; aspect-ratio: 1; border-radius: 50%; }
+.bd-disc {
+  background: var(--bd-disc, var(--bd-disc-vera));
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, .45), inset 0 -16px 28px -14px rgba(4, 56, 43, .5);
+}
+.bd-disc::after { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 2.5px solid rgba(250, 246, 238, .6); }
+.bd-lip {   /* the front half of the rim, drawn over the body */
+  box-sizing: border-box; border: 2.5px solid rgba(250, 246, 238, .8); pointer-events: none;
+  -webkit-mask: linear-gradient(transparent 50%, #000 50%); mask: linear-gradient(transparent 50%, #000 50%);
+}
+.bd-fig {
+  --bd-cy: 65.385%;                       /* circle centre: (520 - 180) / 520 */
+  position: absolute; inset: 0; display: block;
+  -webkit-mask:
+    linear-gradient(#000 0 0) top / 100% var(--bd-cy) no-repeat,
+    radial-gradient(circle closest-side at 50% var(--bd-cy), #000 calc(100% - .5px), transparent 100%);
+  mask:
+    linear-gradient(#000 0 0) top / 100% var(--bd-cy) no-repeat,
+    radial-gradient(circle closest-side at 50% var(--bd-cy), #000 calc(100% - .5px), transparent 100%);
+}
+.bd-fig img {
+  display: block; width: 100%; height: 100%; max-width: none;
+  object-fit: contain; object-position: 50% 100%;
+  transform-origin: 50% 100%; scale: 1; transition: scale .35s var(--bd-ease);   /* grows upward; the bottom never lifts */
+}
+.bd-door--specialist, .bd-soon[data-door="specialist"] { --bd-disc: var(--bd-disc-specialist); }
+.bd-door--vera, .bd-soon[data-door="vera"] { --bd-disc: var(--bd-disc-vera); }
+/* the one orchestrated moment: on open, both figures rise out of their circles */
+.bd-dialog[open] .bd-choose .bd-fig img { animation: bd-emerge .5s var(--bd-ease) .06s both; }
+.bd-dialog[open] .bd-choose .bd-door + .bd-door .bd-fig img { animation-delay: .13s; }
+@media (hover: hover) {
+  .bd-door:hover .bd-fig img { scale: 1.04; }
+}
+.bd-door:active .bd-stage { transform: scale(.97); }
+.bd-door:focus-visible { outline-offset: 2px; }
+
+/* coming soon */
+.bd-soon { display: flex; flex-direction: column; align-items: center; padding-top: 2px; text-align: center; animation: bd-fade .22s ease both; }
+.bd-soon .bd-stage { --bd-d: 104px; }
+.bd-soon .bd-fig img { animation: bd-emerge .45s var(--bd-ease) both; }
+.bd-soon-title { margin: 12px 0 0; font: 600 26px/1.15 var(--font-display); letter-spacing: -.01em; color: var(--deep); text-wrap: balance; }
+.bd-status { text-align: center; }
+.bd-status p { margin: 8px auto 0; max-width: 40ch; font: 400 16px/1.55 var(--font-sans); color: var(--ink-700); text-wrap: pretty; }
+.bd-status .bd-safety { margin-top: 12px; padding: 10px 14px; border-radius: 14px; background: var(--green-100); color: var(--deep); font-size: 15px; }
+.bd-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 20px; }
+.bd-btn {
+  min-height: 46px; padding: 11px 22px; border-radius: var(--radius-pill);
+  font: 600 16px/1.2 var(--font-sans); cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+.bd-btn--ghost { border: 1.5px solid #c9d6cf; background: transparent; color: var(--deep); }
+.bd-btn--primary { border: 1.5px solid var(--green-900); background: var(--green-900); color: var(--cream); }  /* 7.6:1 */
+@media (hover: hover) {
+  .bd-btn--ghost:hover { background: var(--green-100); }
+  .bd-btn--primary:hover { background: var(--deep); border-color: var(--deep); }
+}
+
+@keyframes bd-pop { from { opacity: 0; transform: translateY(-8px) scale(.94); } }
+@keyframes bd-out { to { opacity: 0; transform: translateY(-6px) scale(.97); } }
+@keyframes bd-fade { from { opacity: 0; } }
+@keyframes bd-emerge { 0% { opacity: 0; transform: translateY(16%); } 35% { opacity: 1; } 100% { opacity: 1; transform: none; } }
+@keyframes bd-sheet-in { from { opacity: 0; transform: translateY(32px); } }
+@keyframes bd-sheet-out { to { opacity: 0; transform: translateY(24px); } }
+
+/* phones: an inset bottom sheet, within thumb reach */
+@media (max-width: 600px) {
+  .bd-panel {
+    top: auto; left: max(10px, env(safe-area-inset-left)); right: max(10px, env(safe-area-inset-right)); bottom: calc(10px + env(safe-area-inset-bottom));
+    width: auto; max-height: calc(100dvh - 76px); padding: 16px 14px 20px; transform-origin: 50% 100%;
+  }
+  .bd-dialog[open] .bd-panel { animation-name: bd-sheet-in; animation-duration: .3s; }
+  .bd-dialog.bd-closing .bd-panel { animation-name: bd-sheet-out; }
+  .bd-title { font-size: 22px; margin-left: 6px; }
+  .bd-choose { gap: 4px; }
+  .bd-door { padding-inline: 2px; }
+  .bd-name { font-size: 17.5px; }
+  .bd-sub { font-size: 15px; }
+}
+@media (max-width: 359px) { .bd-actions .bd-btn { flex: 1 1 100%; } }
+
+/* ---------- comfort settings ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .bd-pane, .bd-pane::before, .bd-stage, .bd-fig img { transition: none; }
+  .bd-pane:active, .bd-door:active .bd-stage { transform: none; }
+  .bd-dialog[open] .bd-panel, .bd-dialog[open]::backdrop, .bd-dialog.bd-closing .bd-panel,
+  .bd-dialog .bd-fig img, .bd-soon { animation: none !important; }
+  .bd-door:hover .bd-fig img { scale: 1; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .bd-pane { background: var(--bd-glass-solid); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .bd-pane::before { display: none; }
+  .bd-pane::after { background: rgba(250, 246, 238, .55); }
+  .bd-dialog::backdrop { background: rgba(2, 46, 34, .72); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .bd-pane { background: linear-gradient(180deg, #355f53 0%, #1b4a3d 55%, #1f5446 100%); }
+  .bd-dialog::backdrop { background: rgba(2, 46, 34, .62); }
+}
+@media (prefers-contrast: more) {
+  .bd-pane { background: var(--bd-glass-solid); }
+  .bd-pane::before { display: none; }
+  .bd-pane::after { background: var(--cream); }
+  .bd-sub { color: var(--ink-700); }
+  .bd-btn--ghost { border-color: var(--deep); }
+}
+@media (forced-colors: active) {
+  .bd-pane::before, .bd-pane::after { display: none; }
+  .bd-door { border: 1px solid ButtonText; }
+}

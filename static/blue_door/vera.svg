@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 520" width="400" height="520">
+  <defs>
+    <linearGradient id="vb" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0b6b53"/>
+      <stop offset="1" stop-color="#04473a"/>
+    </linearGradient>
+    <linearGradient id="vh" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#35261f"/>
+      <stop offset="1" stop-color="#1b1310"/>
+    </linearGradient>
+  </defs>
+  <!-- hair, back: a long bob, longer on the left, tucked behind the right ear -->
+  <path d="M200 30C132 30 102 82 104 150C106 210 98 262 106 300C112 326 128 340 148 341C162 342 172 334 176 322L224 296C238 302 262 300 276 286C290 266 296 218 296 150C296 82 268 30 200 30Z" fill="url(#vh)"/>
+  <g transform="translate(0 -14)">
+    <!-- blazer -->
+    <path d="M34 536L40 424C43 384 60 360 96 348L166 322C176 318 182 310 184 300H216C218 310 224 318 234 322L304 348C340 360 357 384 360 424L366 536Z" fill="url(#vb)"/>
+    <path d="M44 420C48 386 64 364 96 352L150 332C120 352 92 372 74 404C64 424 58 470 56 536H38Z" fill="#14806a" opacity=".55"/>
+    <!-- top, cream -->
+    <path d="M164 314H236L210 476H190Z" fill="#faf6ee"/>
+    <!-- lapels -->
+    <path d="M164 314L190 476L176 458L136 360L150 330Z" fill="#035241"/>
+    <path d="M236 314L210 476L224 458L264 360L250 330Z" fill="#035241"/>
+    <path d="M150 330L136 360L156 350Z" fill="#0b6b53"/>
+    <path d="M250 330L264 360L244 350Z" fill="#0b6b53"/>
+  </g>
+  <!-- left hair falling in front of the shoulder -->
+  <path d="M108 250C104 286 110 318 128 334C140 344 158 344 168 336C156 330 148 316 146 296Z" fill="#241914"/>
+  <!-- neck -->
+  <path d="M178 214V292C178 312 222 312 222 292V214Z" fill="#c38762"/>
+  <path d="M178 228C190 254 210 254 222 228V262C210 274 190 274 178 262Z" fill="#a5694a" opacity=".7"/>
+  <g transform="matrix(1.06 0 0 1.06 -12 -9)">
+    <!-- right ear and earring (the left one is under the hair) -->
+    <ellipse cx="261" cy="160" rx="9" ry="14" fill="#b97d58"/>
+    <circle cx="260" cy="181" r="6" fill="none" stroke="#e2a93b" stroke-width="3"/>
+    <!-- face -->
+    <path d="M200 70C156 70 140 104 140 150C140 198 164 236 200 238C236 236 260 198 260 150C260 104 244 70 200 70Z" fill="#c68a64"/>
+    <path d="M236 92C262 120 264 196 226 230C244 198 250 140 236 92Z" fill="#a96f4d" opacity=".35"/>
+    <!-- cheeks -->
+    <ellipse cx="167" cy="188" rx="13" ry="8" fill="#e07a63" opacity=".3"/>
+    <ellipse cx="233" cy="188" rx="13" ry="8" fill="#e07a63" opacity=".3"/>
+    <!-- brows -->
+    <path d="M164 134Q177 126 190 131" fill="none" stroke="#2a1c17" stroke-width="4.5" stroke-linecap="round"/>
+    <path d="M210 131Q223 126 236 134" fill="none" stroke="#2a1c17" stroke-width="4.5" stroke-linecap="round"/>
+    <!-- eyes, with a small lifted outer line -->
+    <ellipse cx="178" cy="154" rx="5.5" ry="7" fill="#2a1c17"/>
+    <ellipse cx="222" cy="154" rx="5.5" ry="7" fill="#2a1c17"/>
+    <circle cx="180" cy="151" r="1.8" fill="#fff"/>
+    <circle cx="224" cy="151" r="1.8" fill="#fff"/>
+    <path d="M172.5 149L168.5 146.5M227.5 149L231.5 146.5" stroke="#2a1c17" stroke-width="2.4" stroke-linecap="round"/>
+    <!-- nose -->
+    <path d="M199 164Q195 178 199 183Q204 185 207 182" fill="none" stroke="#9c6343" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- smile -->
+    <path d="M181 199Q200 221 219 199Q200 207 181 199Z" fill="#fff8f2"/>
+    <path d="M181 199Q200 221 219 199" fill="none" stroke="#9a4038" stroke-width="3.6" stroke-linecap="round"/>
+    <path d="M181 199Q200 205 219 199" fill="none" stroke="#9a4038" stroke-width="2.4" stroke-linecap="round"/>
+    <!-- hair, front: side part on her left, a sweep across the forehead -->
+    <path d="M232 46C176 42 134 72 128 130C124 168 128 208 138 244C142 204 146 164 158 136C172 106 200 92 230 86Z" fill="url(#vh)"/>
+    <path d="M236 46C266 50 284 82 280 134C272 108 258 94 238 88Z" fill="url(#vh)"/>
+    <path d="M220 54C184 56 154 78 144 118C160 90 186 72 220 66Z" fill="#5a4136" opacity=".75"/>
+  </g>
+</svg>

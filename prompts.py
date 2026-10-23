@@ -298,3 +298,19 @@ TERMS_SCHEMA = {
     "required": ["conditions"],
     "additionalProperties": False,
 }
+
+# Which simple self-care items to show (shop.py has the list). A small model picks KEYS from the items allowed for this patient; the code has
+# already removed items unsuitable for their age, and the model can't pick anything else.
+HELP_PROMPT = """\
+You help a family choose simple self-care items they could buy near them for a mild problem. You get the patient's likely conditions (most \
+likely first, each with its risk), their age and sex, and the list of items allowed for them, each with a "use" description.
+
+How to choose:
+- Pick at most 3 items. An item fits only when its "use" clearly matches what the patient has.
+- Read every "NOT for" limit in an item's description and obey it. If the patient's conditions fall under one of its limits, do not pick \
+that item.
+- Choose for the most likely condition. Choose for the next condition only if it is no more serious than the first and the item still fits.
+- If you are unsure whether an item is right, pick nothing. An empty list is a good answer: it sends the family to their doctor or pharmacist.
+- Never pick anything that is not on the list, and never a medicine, supplement or herbal product.
+- Do not pick items just because they are on the list, or to fill the three places.
+Return only keys from the list."""

@@ -37,10 +37,6 @@
     background: var(--deep);
   }
   header img { height: 28px; width: auto; display: block; }
-  .tag {
-    padding: 5px 13px; border-radius: var(--radius-pill); font-size: 13px; font-weight: 500;
-    color: rgba(250,246,238,.85); background: rgba(250,246,238,.08); border: 1px solid rgba(250,246,238,.25);
-  }
 
   /* thread */
   #thread { flex: 1; min-height: 0; overflow-y: auto; scroll-behavior: smooth; overscroll-behavior: contain; }
@@ -155,6 +151,48 @@
   .found-note { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--ink-500); }
   .found-none { margin: 0; font-size: 14.5px; color: var(--ink-700); }
   .found-err { margin: 0; font-size: 14px; color: var(--danger); }
+  /* "Things that may help": a box under the doctor card that opens a grid of example product listings near you */
+  .helpbox { padding: 16px; border-radius: var(--radius-card); background: linear-gradient(135deg, var(--green-100) 0%, #f6fbf9 100%); border: 1px solid #cfe8df; box-shadow: var(--shadow-1); }
+  .help-head { display: flex; align-items: center; gap: 12px; }
+  .help-ico { flex: none; width: 42px; height: 42px; border-radius: 13px; display: grid; place-items: center; background: var(--green-700); color: var(--cream); }
+  .help-head .box-title { margin: 0; color: var(--green-900); }
+  .help-sub { margin-top: 2px; font-size: 14.5px; line-height: 1.35; color: var(--ink-700); }
+  .help-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin-top: 14px; padding: 12px 16px; border: 0; border-radius: var(--radius-pill); background: var(--green-700); color: var(--cream); font: 600 15.5px/1.2 var(--font-sans); cursor: pointer; box-shadow: 0 2px 0 var(--green-900); transition: background .15s, transform .1s; }
+  .help-btn[hidden] { display: none; }
+  .help-btn:hover:not(:disabled) { background: var(--green-900); } .help-btn:active:not(:disabled) { transform: translateY(1px); box-shadow: none; }
+  .help-btn:disabled { opacity: .75; cursor: default; }
+  .hitem { margin-top: 18px; }
+  .hitem h5 { margin: 0; font: 600 18px/1.25 var(--font-display); color: var(--ink-900); letter-spacing: -.005em; }
+  .hwhy { margin: 3px 0 0; font-size: 14.5px; color: var(--ink-700); }
+  .hnote { display: inline-block; margin: 6px 0 0; padding: 4px 10px; border-radius: 8px; background: #fef3e2; color: #9a5b0b; font-size: 13.5px; line-height: 1.4; }
+  .hgrid { display: grid; gap: 10px; margin-top: 10px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .pcard { position: relative; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-0); color: inherit; text-decoration: none; transition: transform .15s, box-shadow .15s, border-color .15s; }
+  .pcard:hover, .pcard:focus-visible { transform: translateY(-2px); border-color: var(--green-500); box-shadow: var(--shadow-2); }
+  .pimg { display: grid; place-items: center; aspect-ratio: 1 / 1; padding: 10px; background: #fff; border-bottom: 1px solid var(--line); }
+  .pimg img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .pimg.noimg img { display: none; }
+  .pimg.noimg::after { content: ""; width: 44px; height: 44px; opacity: .4; background: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23038262' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8h12l-1 12H7L6 8z'/%3E%3Cpath d='M9 8V6a3 3 0 0 1 6 0v2'/%3E%3C/svg%3E"); }
+  .pbadge { position: absolute; top: 8px; left: 8px; display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: var(--radius-pill); font: 600 11.5px/1.5 var(--font-sans); letter-spacing: .02em; box-shadow: 0 1px 2px #1111111a; }
+  .pbadge.instant { background: var(--green-700); color: var(--cream); } .pbadge.pharmacy { background: #e8f1fb; color: #1e4e8c; } .pbadge.market { background: var(--surface-2); color: var(--ink-700); }
+  .pbody { display: flex; flex: 1; flex-direction: column; gap: 5px; padding: 9px 11px 11px; }
+  .ptitle { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; font-size: 14px; line-height: 1.3; color: var(--ink-900); }
+  .pfoot { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; margin-top: auto; padding-top: 2px; }
+  .pprice { font: 700 16px/1 var(--font-sans); color: var(--ink-900); } .pshop { font-size: 12.5px; color: var(--ink-500); }
+  .pgo { font-size: 12.5px; font-weight: 600; color: var(--green-700); }
+  .hnone, .herr { margin: 12px 0 0; font-size: 14.5px; color: var(--ink-700); } .herr { color: var(--danger); }
+  .hfoot { margin: 16px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--ink-500); }
+  .skel { border-radius: 6px; background: linear-gradient(90deg, #edf0ed 25%, #f8faf8 37%, #edf0ed 63%); background-size: 400% 100%; animation: shimmer 1.3s ease infinite; }
+  .hskel .pcard { pointer-events: none; } .hskel .pimg { background: transparent; } .hskel .sk-img { width: 100%; height: 100%; } .hskel .sk-line { height: 11px; margin-bottom: 6px; }
+  @media (max-width: 520px) {   /* phones: the box is narrow, so each product is a row (picture left, details right) instead of a tiny tile */
+    .helpbox { padding: 14px 12px; }
+    .hgrid { grid-template-columns: 1fr; gap: 8px; }
+    .pcard { flex-direction: row; min-height: 96px; }
+    .pimg { flex: none; width: 96px; aspect-ratio: auto; padding: 8px; border-bottom: 0; border-right: 1px solid var(--line); }
+    .pbadge { top: 6px; left: 6px; padding: 1px 7px; font-size: 10.5px; }
+    .pbody { justify-content: center; padding: 8px 10px; }
+    .ptitle { -webkit-line-clamp: 2; }
+  }
+  @keyframes shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
   .assistant .bubble.urgent { background: #fef3f2; border: 1.5px solid #fda29b; }
   .urgent-label { margin-bottom: 4px; font: 600 12px/1.3 var(--font-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--danger); }
 
@@ -277,8 +315,9 @@
     .wrap { padding-top: 16px; } .col { max-width: 90%; } #hero { padding-top: 4vh; }
     .bubble { font-size: 16px; }
   }
-  @media (prefers-reduced-motion: reduce) { #thread { scroll-behavior: auto; } .dots i { animation: none; opacity: .7; } }
+  @media (prefers-reduced-motion: reduce) { #thread { scroll-behavior: auto; } .dots i { animation: none; opacity: .7; } .skel { animation: none; } .pcard, .help-btn { transition: none; } }
 </style>
+<link rel="stylesheet" href="/static/blue_door/blue_door.css">
 </head>
 <body data-view="gate">
 <header>
@@ -288,7 +327,13 @@
     </button>
     <img src="/static/forlife-cream.png" alt="ForLife">
   </div>
-  <span class="tag">Health companion</span>
+  <button class="bd-pane" type="button" data-door="open" aria-haspopup="dialog" aria-controls="bd-dialog">
+    <span class="bd-faces" aria-hidden="true">
+      <span class="bd-face bd-face--vera"><img src="/static/blue_door/vera.svg" alt="" width="400" height="520" decoding="async"></span>
+      <span class="bd-face bd-face--specialist"><img src="/static/blue_door/doctor.svg" alt="" width="400" height="520" decoding="async"></span>
+    </span>
+    <span class="bd-pane-label">Prefer to talk?</span>
+  </button>
 </header>
 
 <section id="gate">
@@ -504,12 +549,37 @@ function renderFound(d) {
   return rs.map(place).join('') + `<p class="found-note">From Google Maps listings near ${pin}${d.stale ? ', saved a little while ago, so details may have changed' : ''}. ${rs.some((p) => p.match && num(p.match.reviews) > 0) ? ' Places whose reviews mention what you may have are listed higher.' : ''} Please check timings before you go. ForLife doesn't recommend or vouch for these places.</p>`;
 }
 
+/* "Things that may help": a box under the doctor card. A tap asks the server (/help/nearby) for example listings near the account
+   holder's pincode; each card links to its Google Shopping page. One request per tap: the box is marked busy before anything else. */
+const BOLT = '<svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>';
+const SHOP_KIND = { instant: 'Instant app', pharmacy: 'Pharmacy', market: 'Online store' };
+const helpBox = (conds, patient) => `<aside class="helpbox" aria-label="Things that may help" data-c="${esc(conds)}" data-p="${esc(String(patient || ''))}">
+    <div class="help-head"><span class="help-ico" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8h12l-1 12H7L6 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg></span>
+      <div><div class="box-title">Things that may help</div><div class="help-sub">Comfort items and basics, with example listings from stores and quick-delivery apps near you</div></div></div>
+    <button type="button" class="help-btn">Explore what can help, nearby</button><div class="helped" aria-live="polite"></div></aside>`;
+const helpSkeleton = `<div class="hitem hskel" aria-hidden="true"><div class="hgrid">${'<div class="pcard"><span class="pimg"><span class="skel sk-img"></span></span><span class="pbody"><span class="skel sk-line"></span><span class="skel sk-line" style="width:60%"></span></span></div>'.repeat(3)}</div></div>`;
+function renderHelp(d) {
+  const items = list(d.items), pin = esc(String(d.pincode || ''));
+  if (!items.length) return `<p class="hnone">${d.reason === 'pregnancy' ? 'I can&rsquo;t suggest items for this. Your doctor is the best next step.' : d.reason === 'urgent' ? 'Because of what this could be, please see a doctor first. Shopping can wait.' : 'Nothing on my short list clearly fits this one, so your doctor or pharmacist is the best next step.'}</p>`;
+  const card = (p) => {
+    const link = /^https:\/\/www\.google\.com\//.test(String(p.link || '')) ? String(p.link) : '', img = /^https:\/\//.test(String(p.image || '')) ? String(p.image) : '';
+    if (!link) return '';   // only Google links are ever followed
+    const kind = SHOP_KIND[p.kind] ? p.kind : 'market';
+    return `<a class="pcard" href="${esc(link)}" target="_blank" rel="noopener noreferrer nofollow"><span class="pimg${img ? '' : ' noimg'}">${img ? `<img src="${esc(img)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}</span>
+      <span class="pbadge ${kind}">${kind === 'instant' ? BOLT : ''}${SHOP_KIND[kind]}</span>
+      <span class="pbody"><span class="ptitle">${esc(String(p.title || ''))}</span><span class="pfoot"><span class="pprice">${esc(String(p.price || ''))}</span><span class="pshop">${esc(String(p.shop || ''))}</span></span><span class="pgo">View on Google Shopping &rarr;</span></span></a>`;
+  };
+  const html = items.map((it) => `<section class="hitem"><h5>${esc(String(it.name || ''))}</h5><p class="hwhy">${esc(String(it.why || ''))}</p>${it.note ? `<p class="hnote">${esc(String(it.note))}</p>` : ''}<div class="hgrid">${list(it.products).map(card).join('')}</div></section>`).join('');
+  return html + `<p class="hfoot">Example listings from Google Shopping near ${pin}${d.stale ? ', saved a little while ago' : ''}. Tapping one opens its Google Shopping page, where you choose a shop. Prices and stock change, and an &ldquo;Instant app&rdquo; badge doesn&rsquo;t promise delivery to you. Check the label, and ask your doctor or pharmacist before giving anything to a child. ForLife doesn&rsquo;t sell or recommend these products.</p>`;
+}
+
 function renderAssistant(content) {
   const d = parseReply(content);
   const text = [d.reply, d.headline, d.message].find((t) => typeof t === 'string') || '';
   const emergency = d.kind === 'emergency' || d.emergency === true;
   const conditions = list(d.conditions), doNow = list(d.do_now);
   const assessed = conditions.length > 0;   // an emergency can come with the full assessment (red box first, then the cards)
+  const cd = JSON.stringify(conditions.slice(0, 5).map((c) => ({ t: String(c.likelihood || ''), n: String(c.name || '').slice(0, 120), r: String(c.medical_risk || '') })));   // sent with a search so it can be about these conditions (and so the server can refuse when any of them is urgent)
   const forwho = d.patient_label ? `<div class="forwho">For ${esc(String(d.patient_label))}</div>` : '';
   let html = emergency
     ? `<div class="bubble urgent"><div class="urgent-label">Please get help now</div><p>${inline(text)}</p>${doNow.length && !assessed ? ol(doNow) : ''}</div>`
@@ -530,7 +600,6 @@ function renderAssistant(content) {
       : `<div class="doc-name"><h4>${esc(String(doc.name))}</h4>${infoBtn(doc)}</div>${aboutBox(doc)}`;
     // A way to find them nearby, for each doctor we point to that they don't already have. Not on an emergency: the emergency message stays the only instruction.
     // The conditions go with the search so their reviews can be read for them (not for the "Not able to reach" link: they have their own doctor).
-    const cd = JSON.stringify(conditions.slice(0, 5).map((c) => ({ t: String(c.likelihood || ''), n: String(c.name || '').slice(0, 120) })));
     const findFirst = emergency ? '' : own ? findOwn(doc.specialty, own) : findBox(doc.specialty, doc.name, cd);
     const findNext = emergency || !nxt ? '' : findBox(nxt.specialty, nxt.name, cd);
     html += `<aside class="doctor" aria-label="Which doctor to see"><div class="box-title">Who to see</div>
@@ -542,6 +611,8 @@ function renderAssistant(content) {
       ${guide ? `<div class="next doc-pick">
         <div class="doc-name"><span><strong>${esc(String(guide.name))}</strong>, ${esc(String(guide.label))}, can also guide you while you arrange this.</span>${infoBtn(guide)}</div>${ownBox(guide)}</div>` : ''}</aside>`;
   }
+  const urgent = conditions.some((c) => c.medical_risk === 'immediate' && c.likelihood !== 'least_likely');
+  if (assessed && !emergency && !urgent) html += helpBox(cd, d.patient);   // not on an emergency, nor when the most likely or the likely condition needs a doctor today (the server checks too)
   if (assessed) html += SOON;   // after an assessment only
   const older = d.kind ? [] : list(d.questions || (d.question ? [d.question] : []));   // chats saved in the old question-list format
   if (older.length) html += `<div class="bubble">${ol(older)}</div>`;
@@ -636,6 +707,22 @@ document.addEventListener('click', async (e) => {
   } catch (err) {
     if (err.message !== 'auth') out.innerHTML = `<p class="found-err">${esc(err.message)}</p>`;
     b.textContent = label;
+  } finally {
+    delete box.dataset.busy; b.disabled = false;
+  }
+});
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest && e.target.closest('.help-btn'); if (!b) return;
+  const box = b.closest('.helpbox'); if (!box || box.dataset.busy) return;
+  if (!myPin()) { askPincode(); return; }
+  box.dataset.busy = '1'; b.disabled = true;
+  const out = box.querySelector('.helped'), label = b.textContent; b.textContent = 'Looking nearby…'; out.innerHTML = helpSkeleton;
+  try {
+    const data = await api(`/help/nearby?visitor_id=${visitorId}&conditions=${encodeURIComponent(box.dataset.c)}&patient=${encodeURIComponent(box.dataset.p || '')}`);
+    out.innerHTML = renderHelp(data); b.hidden = true;
+    out.querySelectorAll('.pimg img').forEach((im) => im.addEventListener('error', () => im.closest('.pimg').classList.add('noimg')));   // a picture that won't load falls back to an icon
+  } catch (err) {
+    out.innerHTML = err.message === 'auth' ? '' : `<p class="herr">${esc(err.message)}</p>`; b.textContent = label;
   } finally {
     delete box.dataset.busy; b.disabled = false;
   }
@@ -863,5 +950,71 @@ $('gate-form').addEventListener('submit', async (e) => {
   try { await enter(); } catch (err) { if (err.message !== 'auth') { showChat(); showBanner(err.message); } }
 })();
 </script>
+
+<!-- "Blue door" test: counts taps on the Coming soon doors (open, vera, specialist, close). Remove with static/blue_door/. -->
+<dialog class="bd-dialog" id="bd-dialog" aria-labelledby="bd-title" aria-modal="true">
+  <div class="bd-panel">
+    <div class="bd-head">
+      <h2 class="bd-title" id="bd-title" tabindex="-1">Who would you like to talk to?</h2>
+      <button class="bd-x" type="button" data-bd-close aria-label="Close">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+
+    <div class="bd-choose">
+      <button class="bd-door bd-door--vera" type="button" data-door="vera" aria-labelledby="bd-vera-name" aria-describedby="bd-vera-sub">
+        <span class="bd-stage">
+          <span class="bd-disc"></span>
+          <span class="bd-fig"><img src="/static/blue_door/vera.svg" alt="Illustration of Vera, a smiling young woman with shoulder-length hair in a green blazer" width="400" height="520" decoding="async"></span>
+          <span class="bd-lip"></span>
+        </span>
+        <span class="bd-name" id="bd-vera-name">Talk with <span translate="no">Vera</span></span>
+        <span class="bd-sub" id="bd-vera-sub">A friendly guide to talk things through. Not&nbsp;a&nbsp;doctor.</span>
+      </button>
+      <button class="bd-door bd-door--specialist" type="button" data-door="specialist" aria-labelledby="bd-spec-name" aria-describedby="bd-spec-sub">
+        <span class="bd-stage">
+          <span class="bd-disc"></span>
+          <span class="bd-fig"><img src="/static/blue_door/doctor.svg" alt="Illustration of a smiling doctor with glasses, in a white coat with a stethoscope" width="400" height="520" decoding="async"></span>
+          <span class="bd-lip"></span>
+        </span>
+        <span class="bd-name" id="bd-spec-name">Reach out to a <span translate="no">ForLife</span> specialist</span>
+        <span class="bd-sub" id="bd-spec-sub">A health professional from the <span translate="no">ForLife</span> team.</span>
+      </button>
+    </div>
+
+    <div class="bd-soon" hidden>
+      <span class="bd-stage">
+        <span class="bd-disc"></span>
+        <span class="bd-fig"><img alt="" width="400" height="520"></span>
+        <span class="bd-lip"></span>
+      </span>
+      <h2 class="bd-soon-title" id="bd-soon-title" tabindex="-1">Coming soon</h2>
+    </div>
+    <!-- always in the page, empty until a door is tapped, so screen readers announce the text -->
+    <div class="bd-status" role="status" aria-live="polite"></div>
+    <div class="bd-actions" hidden>
+      <button class="bd-btn bd-btn--ghost" type="button" data-bd-back>Back</button>
+      <button class="bd-btn bd-btn--primary" type="button" data-bd-close>Keep chatting</button>
+    </div>
+
+    <template id="bd-copy-vera">
+      <p>Talking with Vera isn&rsquo;t live yet.</p>
+      <p>Thanks for tapping. It helps us decide what to build first. You can keep chatting here as usual.</p>
+    </template>
+    <template id="bd-copy-specialist">
+      <p>Reaching a ForLife specialist isn&rsquo;t live yet. Nothing was sent, and no one will contact you.</p>
+      <p>Thanks for tapping. It helps us decide what to build first.</p>
+      <p class="bd-safety">If you need a doctor now, please see one in person. In an emergency, call 112.</p>
+    </template>
+  </div>
+</dialog>
+<script>
+// One tap = one row in interest_events (or one log line if that table isn't created). Counting must never break the page.
+window.blueDoorEvent = (door) => {
+  fetch('/interest', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', 'X-Password': password },
+    body: JSON.stringify({ visitor_id: visitorId, door }) }).catch(() => {});
+};
+</script>
+<script src="/static/blue_door/blue_door.js"></script>
 </body>
 </html>
