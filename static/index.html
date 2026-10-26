@@ -238,16 +238,24 @@
   .send:hover:not(:disabled) { background: var(--green-900); } .send:disabled { opacity: .4; cursor: default; }
   .note { margin: 8px 0 0; text-align: center; font-size: 12px; color: var(--ink-500); }
 
-  /* password screen */
+  /* sign-in screen */
   #gate { flex: 1; display: none; align-items: center; justify-content: center; padding: 24px 16px; }
   .card { width: 100%; max-width: 380px; padding: 28px; background: var(--surface-0); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow-2); }
   .card h2 { margin: 0 0 6px; font: 600 26px/1.2 var(--font-display); color: var(--ink-900); }
   .card p { margin: 0 0 18px; color: var(--ink-500); }
   .card input { width: 100%; padding: 12px 16px; font: 400 16px var(--font-sans); border: 1px solid var(--line); border-radius: var(--radius-pill); background: var(--surface-1); }
   .card input:focus { outline: 0; border-color: var(--green-700); box-shadow: 0 0 0 3px var(--green-100); }
-  .card button { width: 100%; margin-top: 12px; padding: 12px; font: 600 16px var(--font-sans); color: var(--cream); background: var(--green-700); border: 0; border-radius: var(--radius-pill); cursor: pointer; }
+  .card button { width: 100%; margin-top: 12px; padding: 12px; min-height: 44px; font: 600 16px var(--font-sans); color: var(--cream); background: var(--green-700); border: 0; border-radius: var(--radius-pill); cursor: pointer; }
   .card button:hover { background: var(--green-900); }
+  .card button:disabled { opacity: .6; cursor: default; }
+  .card button.google-btn { display: flex; align-items: center; justify-content: center; gap: 12px; color: #1f1f1f; font-weight: 500; background: #fff; border: 1px solid #dadce0; }
+  .card button.google-btn:hover { background: #f8f9fa; border-color: #c6c9cc; }
+  .card button.google-btn svg { flex: none; }
   #gate-error { min-height: 20px; margin: 10px 0 0; font-size: 14px; color: var(--danger); }
+  #account { margin-top: 18px; padding: 12px 6px 0; border-top: 1px solid var(--line); font-size: 13.5px; color: var(--ink-500); }
+  #account-email { display: block; margin-bottom: 4px; overflow-wrap: anywhere; }
+  #signout-btn { padding: 6px 0; font: 600 14px var(--font-sans); color: var(--green-700); background: transparent; border: 0; cursor: pointer; }
+  #signout-btn:hover { text-decoration: underline; }
   body[data-view="gate"] #gate { display: flex; }
   body[data-view="gate"] .shell, body[data-view="gate"] #profile, body[data-view="profile"] #gate, body[data-view="profile"] .shell { display: none; }
 
@@ -337,13 +345,15 @@
 </header>
 
 <section id="gate">
-  <form class="card" id="gate-form" autocomplete="off">
+  <div class="card" id="gate-card">
     <h2>Welcome</h2>
-    <p>Enter the access password to continue.</p>
-    <input id="gate-input" type="password" placeholder="Password" aria-label="Access password" autocomplete="off" required>
-    <button type="submit">Continue</button>
+    <p>Sign in with your Google account to pick up where you left off.</p>
+    <button type="button" id="gate-google" class="google-btn">
+      <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+      <span>Continue with Google</span>
+    </button>
     <div id="gate-error" role="alert"></div>
-  </form>
+  </div>
 </section>
 
 <section id="profile">
@@ -371,6 +381,7 @@
   <h2>Your family</h2>
   <div id="family-list"></div>
   <button id="add-member-btn" type="button">+ Add member</button>
+  <div id="account"><span id="account-email"></span><button id="signout-btn" type="button">Sign out</button></div>
 </aside>
 <div id="backdrop"></div>
 <div class="chatcol">
@@ -430,30 +441,42 @@
   </form>
 </div>
 
+<script src="/static/vendor/supabase-js-2.117.2.umd.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+  del(k) { try { localStorage.removeItem(k); } catch {} },
 };
-function uuid4() {
-  const b = crypto.getRandomValues(new Uint8Array(16));
-  b[6] = (b[6] & 0x0f) | 0x40; b[8] = (b[8] & 0x3f) | 0x80;
-  const h = [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
-}
 
-let password = store.get('fl_password') || '';
-let visitorId = store.get('fl_visitor') || uuid4();
-store.set('fl_visitor', visitorId);
+/* ---- who is signed in: Google, through Supabase Auth ---- */
+const SUPABASE_URL = 'https://ecbrpwhwytdgxhksygcp.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_FdK63eYUEQttS54CKIaNIw_5fnPhseO';   // the publishable key is made for browsers: on its own it opens nothing, the server only trusts a signed-in person's token
+/* If Google (or Supabase) sent the person back with an error (they pressed Cancel, or something failed), it is in the address: turn it into plain words and tidy the address. */
+function readOAuthError() {
+  const p = new URLSearchParams(location.hash.slice(1) || location.search.slice(1));
+  if (!p.get('error') && !p.get('error_code')) return '';
+  history.replaceState(null, '', location.pathname);
+  return p.get('error') === 'access_denied' ? 'Sign-in was cancelled. Please try again.' : "Google sign-in didn't work. Please try again.";
+}
+const oauthError = readOAuthError();
+const sb = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+const UUID_RX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const oldVisitor = store.get('fl_visitor');   // from before sign-in existed: handed to /claim once after a sign-in, then forgotten
+let userId = '';
 let lastDay = '';
 
 const thread = $('thread'), messages = $('messages'), input = $('input'), send = $('send'), banner = $('banner');
 
 /* ---- talking to the backend ---- */
+async function token() {   // the signed-in person's access token (the library renews it when it is about to expire)
+  const { data } = await sb.auth.getSession();
+  return data.session ? data.session.access_token : '';
+}
 async function api(path, options = {}) {
-  const res = await fetch(path, { ...options, headers: { 'Content-Type': 'application/json', 'X-Password': password } });
-  if (res.status === 401) { showGate("That password didn't work."); throw new Error('auth'); }
+  const res = await fetch(path, { ...options, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + await token() } });
+  if (res.status === 401) { showGate('Please sign in again.'); await sb.auth.signOut({ scope: 'local' }); throw new Error('auth'); }   // gate first: signing out would otherwise reload the page and lose the message
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Something went wrong. Please try again.');
   return data;
@@ -651,13 +674,13 @@ function addThinking() {
 }
 
 /* ---- screens ---- */
-function showGate(msg = '') { document.body.dataset.view = 'gate'; $('gate-error').textContent = msg; $('gate-input').focus(); }
+function showGate(msg = '') { document.body.dataset.view = 'gate'; $('gate-error').textContent = msg; $('gate-google').focus(); }
 function showChat() { document.body.dataset.view = 'chat'; input.focus(); }
 function showProfile() { document.body.dataset.view = 'profile'; $('p-name').focus(); }
 function showBanner(msg) { banner.textContent = msg; banner.hidden = false; }
 
 async function loadHistory() {
-  const rows = await api(`/history?visitor_id=${visitorId}`);
+  const rows = await api('/history');
   rows.forEach((r) => addMessage(r.role, r.content, r.at));
   showChat();
   thread.scrollTo({ top: thread.scrollHeight, behavior: 'instant' });
@@ -674,7 +697,7 @@ async function sendMessage(text) {
   const waiting = addThinking();
   input.value = ''; autosize(); setBusy(true);
   try {
-    const data = await api('/chat', { method: 'POST', body: JSON.stringify({ visitor_id: visitorId, text }) });
+    const data = await api('/chat', { method: 'POST', body: JSON.stringify({ text }) });
     waiting.remove();
     addMessage('assistant', data.reply, data.at).row.scrollIntoView({ block: 'start' });
   } catch (e) {
@@ -702,7 +725,7 @@ document.addEventListener('click', async (e) => {
   box.dataset.busy = '1'; b.disabled = true;
   const out = box.querySelector('.found'), label = b.textContent; b.textContent = 'Looking nearby…'; out.innerHTML = '';
   try {
-    const data = await api(`/doctors/nearby?visitor_id=${visitorId}&doctor=${encodeURIComponent(box.dataset.key)}${box.dataset.c ? '&conditions=' + encodeURIComponent(box.dataset.c) : ''}`);
+    const data = await api(`/doctors/nearby?doctor=${encodeURIComponent(box.dataset.key)}${box.dataset.c ? '&conditions=' + encodeURIComponent(box.dataset.c) : ''}`);
     out.innerHTML = renderFound(data); b.hidden = true;
   } catch (err) {
     if (err.message !== 'auth') out.innerHTML = `<p class="found-err">${esc(err.message)}</p>`;
@@ -718,7 +741,7 @@ document.addEventListener('click', async (e) => {
   box.dataset.busy = '1'; b.disabled = true;
   const out = box.querySelector('.helped'), label = b.textContent; b.textContent = 'Looking nearby…'; out.innerHTML = helpSkeleton;
   try {
-    const data = await api(`/help/nearby?visitor_id=${visitorId}&conditions=${encodeURIComponent(box.dataset.c)}&patient=${encodeURIComponent(box.dataset.p || '')}`);
+    const data = await api(`/help/nearby?conditions=${encodeURIComponent(box.dataset.c)}&patient=${encodeURIComponent(box.dataset.p || '')}`);
     out.innerHTML = renderHelp(data); b.hidden = true;
     out.querySelectorAll('.pimg img').forEach((im) => im.addEventListener('error', () => im.closest('.pimg').classList.add('noimg')));   // a picture that won't load falls back to an icon
   } catch (err) {
@@ -837,17 +860,17 @@ const memberWho = () => $('m-name').value.trim().split(/\s+/)[0] || 'this person
 ['m-dob', 'm-sex', 'm-name'].forEach((id) => $(id).addEventListener('input', () => { if (!editing) refreshDocs($('m-docs'), $('m-dob').value, $('m-sex').value, memberWho()); }));
 let needsPincode = false;
 async function loadFamily() {
-  const data = await api(`/family?visitor_id=${visitorId}`);
+  const data = await api('/family');
   family = data.members; needsPincode = !!data.needs_pincode; renderFamily();
   return data.needs_profile;
 }
-async function enter() {                       // after a good password: profile first (once), then the chat
+async function enter() {                       // after a good sign-in: profile first (once), then the chat
   let needsProfile = false;
   try { needsProfile = await loadFamily(); }
   catch (e) { if (e.message === 'auth') throw e; showBanner(e.message); }   // e.g. profiles not set up yet: carry on with the chat
   if (needsProfile) { showProfile(); return; }
   await loadHistory();
-  if (needsPincode && !store.get('fl_pin_asked')) { store.set('fl_pin_asked', '1'); askPincode(); }   // a family that joined before pincodes: asked once (the Find buttons ask again when it matters)
+  if (needsPincode && !store.get('fl_pin_asked_' + userId)) { store.set('fl_pin_asked_' + userId, '1'); askPincode(); }   // a family that joined before pincodes: asked once (the Find buttons ask again when it matters)
 }
 /* The pincode lives on your own profile: first-visit form, or "Edit your profile" (opened here when it is missing). */
 function askPincode() {
@@ -857,12 +880,12 @@ function askPincode() {
   $('m-pincode').focus();
 }
 const profileBody = (relation, pre) => JSON.stringify({
-  visitor_id: visitorId, relation, name: $(pre + '-name').value, dob: $(pre + '-dob').value, sex: $(pre + '-sex').value,
+  relation, name: $(pre + '-name').value, dob: $(pre + '-dob').value, sex: $(pre + '-sex').value,
   conditions: $(pre + '-conditions').value, medicines: $(pre + '-medicines').value, allergies: $(pre + '-allergies').value,
   doctors: docsPayload($(pre + '-docs')), ...(pre === 'p' ? { pincode: $('p-pincode').value } : {}),
 });
 const editBody = () => JSON.stringify({
-  visitor_id: visitorId, conditions: $('m-conditions').value, medicines: $('m-medicines').value, allergies: $('m-allergies').value,
+  conditions: $('m-conditions').value, medicines: $('m-medicines').value, allergies: $('m-allergies').value,
   doctors: docsPayload($('m-docs')), ...(editing && editing.relation === 'self' ? { pincode: $('m-pincode').value } : {}),   // others: left out, so unchanged
 });
 /* Save a profile once: the button is locked while the request is out (a second click can't send a second one),
@@ -937,17 +960,42 @@ $('m-form').addEventListener('submit', async (e) => {
   if (await saveMember($('m-form'), send, $('m-error'), editing ? 'Saving…' : 'Adding…')) closeModal();
 });
 
-$('gate-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const tried = $('gate-input').value.trim(); if (!tried) return;
-  password = tried;
-  try { await enter(); store.set('fl_password', password); }
-  catch (err) { if (err.message !== 'auth') showGate(err.message); }
+/* ---- sign in with Google ---- */
+/* Before sign-in existed, this browser saved everything under a random id. Hand it over once, so those chats follow the account. */
+async function claimOldChats() {
+  if (!oldVisitor) return;
+  if (!UUID_RX.test(oldVisitor)) { store.del('fl_visitor'); return; }
+  try {
+    await api('/claim', { method: 'POST', body: JSON.stringify({ old_id: oldVisitor }) });
+    store.del('fl_visitor');   // the server gave a clear answer (moved, or nothing to move, or the account already has chats): done with it
+  } catch (e) { if (e.message === 'auth') throw e; }   // anything else (server busy, offline): keep the id and try again next time
+}
+async function startSession() {
+  const { data } = await sb.auth.getSession();
+  if (!data.session) return showGate();
+  userId = data.session.user.id;
+  $('account-email').textContent = data.session.user.email || '';
+  await claimOldChats();   // before enter(): loading the family or the chat would make the account non-empty
+  await enter();
+}
+async function begin() {   // after a sign-in and on every page load with a saved session; a hiccup on our side keeps the person signed in (banner), only a refused token goes back to the sign-in screen
+  try { await startSession(); } catch (err) { if (err.message !== 'auth') { showChat(); showBanner(err.message); } }
+}
+$('gate-google').addEventListener('click', async () => {   // sends the person to Google, who sends them back to this page already signed in
+  if (!sb) return showGate('Sign-in could not load. Please refresh the page.');
+  const button = $('gate-google'); button.disabled = true; $('gate-error').textContent = '';
+  const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + '/', queryParams: { prompt: 'select_account' } } });   // prompt: on a shared family phone, ask which Google account
+  if (error) { button.disabled = false; showGate("I couldn't start Google sign-in. Please try again."); }
 });
+addEventListener('pageshow', () => { $('gate-google').disabled = false; });   // coming back with the browser's Back button from Google's page
+$('signout-btn').addEventListener('click', async () => { await sb.auth.signOut({ scope: 'local' }); location.reload(); });   // reload: the next person must not see this chat
+if (sb) sb.auth.onAuthStateChange((event) => { if (event === 'SIGNED_OUT' && document.body.dataset.view !== 'gate') location.reload(); });   // signed out in another tab
 
 (async () => {
-  if (!password) return showGate();
-  try { await enter(); } catch (err) { if (err.message !== 'auth') { showChat(); showBanner(err.message); } }
+  if (!sb) return showGate('Sign-in could not load. Please refresh the page.');
+  const { data } = await sb.auth.getSession();
+  if (!data.session) return showGate(oauthError);
+  await begin();
 })();
 </script>
 
@@ -1011,8 +1059,8 @@ $('gate-form').addEventListener('submit', async (e) => {
 <script>
 // One tap = one row in interest_events (or one log line if that table isn't created). Counting must never break the page.
 window.blueDoorEvent = (door) => {
-  fetch('/interest', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', 'X-Password': password },
-    body: JSON.stringify({ visitor_id: visitorId, door }) }).catch(() => {});
+  token().then((t) => fetch('/interest', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t },
+    body: JSON.stringify({ door }) })).catch(() => {});
 };
 </script>
 <script src="/static/blue_door/blue_door.js"></script>

@@ -1,4 +1,6 @@
 -- The one table for v0: every chat message, grouped by visitor.
+-- visitor_id (here and in the other tables) is the signed-in person's Supabase Auth user id. Before sign-in existed it was a random id kept by the
+-- browser; POST /claim moves such rows to an account. There is deliberately no foreign key to auth.users, because old rows still hold the random ids.
 -- Row-level security is ON with no policies, so the public Supabase key can't read it;
 -- only our backend (which connects with DATABASE_URL) can.
 

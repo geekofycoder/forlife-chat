@@ -15,7 +15,7 @@ services:
         sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
-      - key: SHARED_PASSWORD
+      - key: SUPABASE_URL      # https://<project-ref>.supabase.co ; not a secret, but the app will not start without it
         sync: false
       - key: SERPER_API_KEY    # "doctors near you"; leave it empty and that button says it isn't set up yet
         sync: false

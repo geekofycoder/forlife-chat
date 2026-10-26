@@ -1,4 +1,4 @@
-"""ForLife health companion, v0: a consultation. One chat per visitor, history kept in Postgres.
+"""ForLife health companion, v0: a consultation. One chat per signed-in user, history kept in Postgres.
 
 Every message from the patient goes through two steps:
   1. INTERVIEW  Claude answers like a doctor: a calm reply plus the next question, and a hidden confidence number.
@@ -12,18 +12,20 @@ load_dotenv(override=True)
 import json
 import logging
 import os
-import secrets
 import time
 import uuid
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 from pathlib import Path
+from typing import Annotated
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
 import anthropic
 import asyncpg
+import jwt
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -49,7 +51,7 @@ MODEL = os.environ.get("CHAT_MODEL", "claude-sonnet-5-5")
 EFFORT = os.environ.get("CHAT_EFFORT", "low")                 
 INTERVIEW_EFFORT = os.environ.get("INTERVIEW_EFFORT", EFFORT)
 TERMS_MODEL = os.environ.get("TERMS_MODEL", "claude-haiku-5-5")   # writes the words used to look for conditions in reviews (a small, quick job)
-REQUIRED = ["DATABASE_URL", "ANTHROPIC_API_KEY", "SHARED_PASSWORD"]
+REQUIRED = ["DATABASE_URL", "ANTHROPIC_API_KEY", "SUPABASE_URL"]
 TRY_AGAIN = "I am facing some internal issues, don't worry I will come back to you and help you with your cure!"
 # CONFIDENCE_TO_CONCLUDE (70) and REOPEN_BELOW (60) live in prompts.py, next to the prompt text that quotes them.
 MIN_QUESTIONS = 4            # never give the assessment before this many questions have been asked
@@ -72,6 +74,8 @@ async def lifespan(app: FastAPI):
     missing = [name for name in REQUIRED if not os.environ.get(name)]
     if missing:
         raise RuntimeError(f"Missing in .env: {', '.join(missing)}")
+    if not supabase_url().startswith("https://"):
+        raise RuntimeError("SUPABASE_URL must look like https://<project-ref>.supabase.co (Supabase Dashboard > Project Settings > API).")
     try:
         app.state.db = await asyncpg.create_pool(
             os.environ["DATABASE_URL"],
@@ -130,9 +134,57 @@ async def load_members(visitor_id):
         return []
 
 
-def check_password(x_password: str = Header(default="")):
-    if not secrets.compare_digest(x_password.encode(), os.environ["SHARED_PASSWORD"].encode()):
-        raise HTTPException(401, "Wrong password")
+# ---------- who is calling ----------
+# People sign in with Google, through Supabase Auth. The page sends its session's access token as
+# "Authorization: Bearer <token>". We check the token's signature against the project's public key (ES256, published at the JWKS
+# address, no secret needed) and take the user id from it. The id the database calls visitor_id IS that user id. Nothing the browser
+# says about who it is (an id in the body or the query) is ever used.
+
+def supabase_url() -> str:
+    return os.environ.get("SUPABASE_URL", "").strip().rstrip("/")
+
+
+_jwks = None   # one key client for the whole server: it keeps the public keys for 10 minutes and limits how often it asks again
+
+
+def jwks_client() -> jwt.PyJWKClient:
+    global _jwks
+    if _jwks is None:
+        _jwks = jwt.PyJWKClient(f"{supabase_url()}/auth/v1/.well-known/jwks.json", cache_keys=True, lifespan=600, timeout=5)
+    return _jwks
+
+
+def verify_token(token: str) -> uuid.UUID:
+    """The user id inside a Supabase access token. Blocking (it may fetch the public keys), so call it in a worker thread.
+    Raises jwt.PyJWKClientConnectionError when the keys can't be fetched (our problem), another jwt error for a bad token."""
+    key = jwks_client().get_signing_key_from_jwt(token)
+    claims = jwt.decode(
+        token, key.key, algorithms=["ES256"],   # only the project's own algorithm: a token that names another one is refused
+        audience="authenticated", issuer=f"{supabase_url()}/auth/v1", options={"require": ["exp", "sub", "aud", "iss"]}, leeway=10,
+    )
+    if claims.get("role") != "authenticated":
+        raise jwt.InvalidTokenError("not a signed-in user")
+    try:
+        return uuid.UUID(str(claims["sub"]))
+    except ValueError:
+        raise jwt.InvalidTokenError("the user id is not a UUID")
+
+
+async def current_user(authorization: str = Header(default="")) -> uuid.UUID:
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        raise HTTPException(401, "Please sign in.")
+    try:
+        return await run_in_threadpool(verify_token, token.strip())
+    except jwt.PyJWKClientConnectionError as e:   # not the person's fault: 503, so the page shows its "try again" banner, not the sign-in screen
+        log.error("can't fetch Supabase's public keys: %r", e)
+        raise HTTPException(503, "I couldn't check your sign-in just now. Please try again in a moment.")
+    except jwt.PyJWTError as e:
+        log.info("sign-in token refused: %s %s", type(e).__name__, e if isinstance(e, jwt.PyJWKClientError) else "")
+        raise HTTPException(401, "Please sign in again.")
+
+
+User = Annotated[uuid.UUID, Depends(current_user)]   # an endpoint asks for the signed-in user's id with "visitor_id: User"
 
 
 # ---------- reading what was saved ----------
@@ -312,7 +364,6 @@ def percent(v) -> int:
 
 
 class ChatIn(BaseModel):
-    visitor_id: uuid.UUID  # the browser's "cloakroom ticket"
     text: str = Field(max_length=4000)
 
 
@@ -324,7 +375,6 @@ class DoctorIn(BaseModel):
 
 
 class MemberIn(BaseModel):
-    visitor_id: uuid.UUID
     relation: str
     name: str = Field(max_length=200)
     dob: date
@@ -338,7 +388,6 @@ class MemberIn(BaseModel):
 
 class EditIn(BaseModel):
     """What can be changed on a saved profile: health details, pincode and their own doctors (not name, age or relation)."""
-    visitor_id: uuid.UUID
     conditions: str = Field(default="", max_length=2000)
     medicines: str = Field(default="", max_length=2000)
     allergies: str = Field(default="", max_length=2000)
@@ -346,8 +395,8 @@ class EditIn(BaseModel):
     doctors: list[DoctorIn] = Field(default=[], max_length=3)
 
 
-@app.get("/family", dependencies=[Depends(check_password)])
-async def get_family(visitor_id: uuid.UUID):
+@app.get("/family")
+async def get_family(visitor_id: User):
     try:
         rows = await db_run("fetch", MEMBERS_QUERY, visitor_id)
     except asyncpg.UndefinedTableError:
@@ -358,8 +407,8 @@ async def get_family(visitor_id: uuid.UUID):
     return {"members": members, "needs_profile": me is None, "needs_pincode": me is not None and not me["pincode"]}
 
 
-@app.post("/members", dependencies=[Depends(check_password)])
-async def add_member(body: MemberIn):
+@app.post("/members")
+async def add_member(body: MemberIn, visitor_id: User):
     today = datetime.now(IST).date()
     try:
         m = family.clean_member(body, today)
@@ -383,7 +432,7 @@ async def add_member(body: MemberIn):
             f"jsonb_to_recordset($9::jsonb) as d(role text, name text, phone text, address text) returning role, name, phone, address) "
             f"select m.*, coalesce((select jsonb_agg(jsonb_build_object('role', x.role, 'name', x.name, 'phone', x.phone, "
             f"'address', x.address) order by x.role) from docs x)::text, {DOCTORS_JSON.format(m='m')}) as doctors from m",
-            body.visitor_id, m["relation"], m["name"], m["dob"], m["sex"], m["conditions"], m["medicines"], m["allergies"],
+            visitor_id, m["relation"], m["name"], m["dob"], m["sex"], m["conditions"], m["medicines"], m["allergies"],
             json.dumps(own), m["pincode"],
         )
     except asyncpg.UniqueViolationError as e:
@@ -393,7 +442,7 @@ async def add_member(body: MemberIn):
         row = await db_run(
             "fetchrow",
             f"{MEMBER_SELECT} where m.visitor_id = $1 and m.relation = $2 and lower(m.name) = lower($3) and m.dob = $4 and m.sex = $5",
-            body.visitor_id, m["relation"], m["name"], m["dob"], m["sex"],
+            visitor_id, m["relation"], m["name"], m["dob"], m["sex"],
         )
         if row is None:
             raise HTTPException(409, "That person is already added.")
@@ -402,10 +451,10 @@ async def add_member(body: MemberIn):
     return family.public_member(row, today)
 
 
-@app.put("/members/{member_id}", dependencies=[Depends(check_password)])
-async def edit_member(member_id: uuid.UUID, body: EditIn):
+@app.put("/members/{member_id}")
+async def edit_member(member_id: uuid.UUID, body: EditIn, visitor_id: User):
     today = datetime.now(IST).date()
-    who = await db_run("fetchrow", "select dob, sex from members where id = $1 and visitor_id = $2", member_id, body.visitor_id)
+    who = await db_run("fetchrow", "select dob, sex from members where id = $1 and visitor_id = $2", member_id, visitor_id)
     if who is None:
         raise HTTPException(404, "That person isn't in your family list.")
     try:
@@ -426,7 +475,7 @@ async def edit_member(member_id: uuid.UUID, body: EditIn):
         f"updated_at = now() returning role, name, phone, address) "
         f"select m.*, coalesce((select jsonb_agg(jsonb_build_object('role', u.role, 'name', u.name, 'phone', u.phone, "
         f"'address', u.address) order by u.role) from up u), '[]'::jsonb)::text as doctors from m",
-        member_id, body.visitor_id, family.clean_text(body.conditions)[:500], family.clean_text(body.medicines)[:500],
+        member_id, visitor_id, family.clean_text(body.conditions)[:500], family.clean_text(body.medicines)[:500],
         family.clean_text(body.allergies)[:500], [d["role"] for d in own], json.dumps(own),
         body.pincode is not None, pincode or None,
     )
@@ -474,8 +523,8 @@ def read_conditions(raw: str) -> list:
     return out
 
 
-@app.get("/doctors/nearby", dependencies=[Depends(check_password)])
-async def doctors_nearby(visitor_id: uuid.UUID, doctor: str, conditions: str = Query(default="", max_length=1500)):
+@app.get("/doctors/nearby")
+async def doctors_nearby(visitor_id: User, doctor: str, conditions: str = Query(default="", max_length=1500)):
     """The best two doctors or clinics of this kind near the account holder's pincode (looked up here, never taken from the page).
     With `conditions` (the assessment's, as JSON) their reviews are read and doctors whose reviews mention those conditions move up."""
     key = doctor.strip().lower()
@@ -523,8 +572,8 @@ async def pick_help_items(conds: list, age_months, sex) -> list:
     return keys
 
 
-@app.get("/help/nearby", dependencies=[Depends(check_password)])
-async def help_nearby(visitor_id: uuid.UUID, conditions: str = Query(default="", max_length=1500), patient: str = Query(default="", max_length=60)):
+@app.get("/help/nearby")
+async def help_nearby(visitor_id: User, conditions: str = Query(default="", max_length=1500), patient: str = Query(default="", max_length=60)):
     """Simple self-care items (ORS, a heating pad...) that may help with the assessment's conditions, as example listings near the account
     holder's pincode (looked up here). A small model picks from a fixed list; code removes what is unsuitable for the patient's age."""
     conds = read_conditions(conditions)
@@ -558,18 +607,17 @@ DOORS = ("open", "vera", "specialist", "close")   # the "blue door" test: which 
 
 
 class InterestIn(BaseModel):
-    visitor_id: uuid.UUID
     door: str = Field(max_length=20)
 
 
-@app.post("/interest", dependencies=[Depends(check_password)])
-async def interest(body: InterestIn):
-    """Counts a tap on a 'coming soon' door: which door, by which visitor (a random id), when. Always logged; stored too if the table exists."""
+@app.post("/interest")
+async def interest(body: InterestIn, visitor_id: User):
+    """Counts a tap on a 'coming soon' door: which door, by which signed-in user, when. Always logged; stored too if the table exists."""
     if body.door not in DOORS:
         raise HTTPException(422, "Unknown door.")
-    log.info("interest door=%s visitor=%s", body.door, str(body.visitor_id)[:8])
+    log.info("interest door=%s visitor=%s", body.door, str(visitor_id)[:8])
     try:
-        await app.state.db.execute("insert into interest_events (visitor_id, door) values ($1, $2)", body.visitor_id, body.door)
+        await app.state.db.execute("insert into interest_events (visitor_id, door) values ($1, $2)", visitor_id, body.door)
     except asyncpg.UndefinedTableError:
         pass   # the table is optional: without it the taps are only in the log
     except (asyncpg.PostgresError, asyncpg.InterfaceError, TimeoutError, ConnectionError) as e:
@@ -577,13 +625,39 @@ async def interest(body: InterestIn):
     return {"ok": True}
 
 
+class ClaimIn(BaseModel):
+    old_id: uuid.UUID
+
+
+@app.post("/claim")
+async def claim(body: ClaimIn, visitor_id: User):
+    """Before sign-in existed, each browser kept a random id and everything it saved sits under that id. After a first sign-in the page
+    sends that old id once, and the chats, family and doctors saved under it move to this account. Only into an empty account (so the
+    one-"you"-per-account rule can't clash), and only once per old id (after the move nothing is left under it). One transaction, and a
+    lock per account, so two browsers signing in at the same moment can't both fill the same account."""
+    if body.old_id == visitor_id:
+        return {"status": "nothing_to_claim"}
+    async with app.state.db.acquire() as conn:
+        async with conn.transaction():
+            await conn.execute("select pg_advisory_xact_lock(hashtext($1))", str(visitor_id))
+            if await conn.fetchval("select exists(select 1 from messages where visitor_id = $1) or exists(select 1 from members where visitor_id = $1)", visitor_id):
+                return {"status": "account_not_empty"}
+            moved = {}
+            for table in ("messages", "members", "member_doctors"):   # fixed names, never from the browser
+                moved[table] = await conn.fetchval(f"with m as (update {table} set visitor_id = $1 where visitor_id = $2 returning 1) select count(*) from m", visitor_id, body.old_id)
+    if not any(moved.values()):
+        return {"status": "nothing_to_claim"}
+    log.info("claim: moved %d messages, %d people, %d doctors from %s to %s", moved["messages"], moved["members"], moved["member_doctors"], str(body.old_id)[:8], str(visitor_id)[:8])
+    return {"status": "claimed", **moved}
+
+
 @app.get("/", include_in_schema=False)
 def page():
     return FileResponse(STATIC / "index.html")
 
 
-@app.get("/history", dependencies=[Depends(check_password)])
-async def history(visitor_id: uuid.UUID):
+@app.get("/history")
+async def history(visitor_id: User):
     rows = await db_run(
         "fetch", "select role, content, created_at from messages where visitor_id = $1 order by id", visitor_id
     )
@@ -594,19 +668,19 @@ async def history(visitor_id: uuid.UUID):
     ]
 
 
-@app.post("/chat", dependencies=[Depends(check_password)])
-async def chat(body: ChatIn):
+@app.post("/chat")
+async def chat(body: ChatIn, visitor_id: User):
     text = body.text.strip()
     if not text:
         raise HTTPException(400, "Please type a message.")
     asked = datetime.now(IST)
 
-    # 1. load this visitor's earlier messages and work out where the consultation is
+    # 1. load this user's earlier messages and work out where the consultation is
     rows = await db_run(
-        "fetch", "select role, content, created_at from messages where visitor_id = $1 order by id", body.visitor_id
+        "fetch", "select role, content, created_at from messages where visitor_id = $1 order by id", visitor_id
     )
     stage, asked_before = read_stage(rows)
-    members = await load_members(body.visitor_id)
+    members = await load_members(visitor_id)
     today = asked.date()
     file_text = family.family_file(members, today)               # who is in the family, ages, conditions, medicines, allergies
     blocks = family.group_blocks(members, GROUP_RULES, GROUP_TITLES, today)
@@ -660,7 +734,7 @@ async def chat(body: ChatIn):
     save = (
         "insert into messages (visitor_id, role, content, created_at) "
         "values ($1, 'user', $2, $4), ($1, 'assistant', $3, $5)",
-        body.visitor_id, text, reply, asked, answered,
+        visitor_id, text, reply, asked, answered,
     )
     try:
         await app.state.db.execute(*save)
@@ -668,7 +742,7 @@ async def chat(body: ChatIn):
         log.warning("database save failed (%r); checking, then retrying once", e)
         # the first try may have been saved just before the connection died: look before saving again
         if not await db_run("fetchval", "select 1 from messages where visitor_id = $1 and role = 'user' and created_at = $2",
-                            body.visitor_id, asked):
+                            visitor_id, asked):
             await app.state.db.execute(*save)
     return {"reply": public(reply), "at": answered.isoformat()}
 
