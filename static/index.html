@@ -201,6 +201,10 @@
   .dots { display: inline-flex; gap: 4px; }
   .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--green-500); animation: bounce 1.2s infinite ease-in-out; }
   .dots i:nth-child(2) { animation-delay: .15s; } .dots i:nth-child(3) { animation-delay: .3s; }
+  .think-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .think-label { font-weight: 600; color: var(--ink-700); }
+  .think-phrase { color: var(--green-700); font-size: 14.5px; line-height: 1.4; transition: opacity .25s ease; }
+  .think-phrase.swap { opacity: 0; }
   @keyframes bounce { 0%, 80%, 100% { opacity: .3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
 
   /* empty state */
@@ -323,7 +327,7 @@
     .wrap { padding-top: 16px; } .col { max-width: 90%; } #hero { padding-top: 4vh; }
     .bubble { font-size: 16px; }
   }
-  @media (prefers-reduced-motion: reduce) { #thread { scroll-behavior: auto; } .dots i { animation: none; opacity: .7; } .skel { animation: none; } .pcard, .help-btn { transition: none; } }
+  @media (prefers-reduced-motion: reduce) { #thread { scroll-behavior: auto; } .dots i { animation: none; opacity: .7; } .skel { animation: none; } .pcard, .help-btn { transition: none; } .think-phrase { transition: none; } }
 
   /* "My first read": the sentence where Vera says what it could be so far, in its own box, with the forlife.care leaf drifting inside.
      Leaf shape and motion are forlife.care's own, scaled for a small box (the site: 8 leaves falling over several screens). */
@@ -735,9 +739,36 @@ function addMessage(role, content, at) {
   return { row, remove: () => { added.forEach((e) => e.remove()); if (added.length === 2) lastDay = prevDay; } };
 }
 
+/* While Vera works on a reply, a short warm line under "Vera is thinking..." changes every few seconds, so the wait feels like progress and care.
+   The line is shown before anyone knows what the reply will be (it can be an emergency message), so every line is true in every case: warm and forward-looking,
+   never a promise of a cure or of any outcome, and never "don't worry". Most replies take 2 to 4 seconds, so the first two lines are the ones most people see. */
+const THINKING_PHRASES = [
+  "Got it. Let's work this out together.",
+  'Reading every detail you shared.',
+  'Thinking about what could be behind this.',
+  'Working out the right next step for you.',   // from here on the lines repeat in a loop (a longer wait, such as an assessment)
+  'Every detail helps me get this right.',
+  'Keeping your age and health in mind.',
+  'Looking for what will help you most.',
+  'Feeling better starts with a clear picture.',
+  'Putting the pieces together, one by one.',
+  'Making sure I know what to look out for.',
+  'Almost there. Thank you for your patience.',
+];
+const THINK_EVERY_MS = 2800, THINK_LOOP_FROM = 3;
 function addThinking() {
   const row = document.createElement('div'); row.className = 'row assistant';
-  row.innerHTML = '<div class="avatar" aria-hidden="true">V</div><div class="col"><div class="bubble thinking"><span class="dots"><i></i><i></i><i></i></span>Vera is listening&hellip;</div></div>';
+  row.innerHTML = '<div class="avatar" aria-hidden="true">V</div><div class="col"><div class="bubble thinking"><span class="dots"><i></i><i></i><i></i></span>' +
+    '<span class="think-text"><span class="think-label">Vera is thinking&hellip;</span><span class="think-phrase" aria-hidden="true"></span></span></div></div>';   // the changing line is hidden from screen readers: only "Vera is thinking" is announced, once
+  const phrase = row.querySelector('.think-phrase'); let i = 0;
+  phrase.textContent = THINKING_PHRASES[0];
+  const timer = setInterval(() => {
+    if (!row.isConnected) { clearInterval(timer); return; }
+    i = i + 1 >= THINKING_PHRASES.length ? THINK_LOOP_FROM : i + 1;
+    phrase.classList.add('swap');
+    setTimeout(() => { phrase.textContent = THINKING_PHRASES[i]; phrase.classList.remove('swap'); }, 250);
+  }, THINK_EVERY_MS);
+  const remove = row.remove.bind(row); row.remove = () => { clearInterval(timer); remove(); };   // the reply (or an error) removes the row: stop changing the line
   messages.append(row); thread.scrollTo({ top: thread.scrollHeight });
   return row;
 }
