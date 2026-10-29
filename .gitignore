@@ -10,3 +10,4 @@ session_id.txt
 *.pdf
 confidence_latency.txt
 benchmark/
+design/

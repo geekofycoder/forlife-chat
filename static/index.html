@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>ForLife Companion</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23038262'/><text x='16' y='23' font-size='20' text-anchor='middle' fill='%23faf6ee' font-family='Georgia,serif' font-weight='700'>F</text></svg>">
+<link rel="icon" type="image/svg+xml" href="/static/brand/rx_mark_square.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
@@ -324,10 +324,50 @@
     .bubble { font-size: 16px; }
   }
   @media (prefers-reduced-motion: reduce) { #thread { scroll-behavior: auto; } .dots i { animation: none; opacity: .7; } .skel { animation: none; } .pcard, .help-btn { transition: none; } }
+
+  /* "My first read": the sentence where Vera says what it could be so far, in its own box, with the forlife.care leaf drifting inside.
+     Leaf shape and motion are forlife.care's own, scaled for a small box (the site: 8 leaves falling over several screens). */
+  .thought { position: relative; overflow: hidden; isolation: isolate; background: var(--green-100); border-radius: var(--radius-card); padding: 14px 18px 16px; min-height: 120px; }
+  .thought-head { position: relative; z-index: 2; display: flex; align-items: center; gap: 8px; margin: 0 0 6px; }
+  .leaf-icon { width: 22px; height: 26px; flex: none; display: block; filter: url(#leafRim); }
+  .thought-label { font: italic 500 17px/1.2 var(--font-display); color: var(--green-900); }
+  .thought-text { position: relative; z-index: 2; margin: 0; color: var(--green-900); font-weight: 500; font-size: 16.5px; line-height: 1.55; overflow-wrap: anywhere; }
+  .leaf-layer { position: absolute; inset: 0; z-index: 1; overflow: hidden; pointer-events: none;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 20px, #000 calc(100% - 20px), transparent 100%); mask-image: linear-gradient(to bottom, transparent 0, #000 20px, #000 calc(100% - 20px), transparent 100%); }
+  .leaf { position: absolute; top: 0; height: 100%; left: var(--x); opacity: var(--op); animation: leaf-fall var(--fall) linear var(--delay) infinite; }
+  .leaf-sway, .leaf-flutter { display: block; }
+  .leaf-sway { animation: leaf-sway var(--sway-t) ease-in-out infinite alternate; }
+  .leaf-flutter { scale: var(--s); animation: leaf-flutter var(--flutter-t) ease-in-out infinite; }
+  .leaf svg { display: block; }
+  @keyframes leaf-fall { 0% { transform: translateY(-4%); } to { transform: translateY(100%); } }
+  @keyframes leaf-sway { 0% { transform: translateX(calc(var(--sway) * -1)); } to { transform: translateX(var(--sway)); } }
+  @keyframes leaf-flutter {
+    0% { transform: perspective(260px) rotateY(-62deg) rotate(-14deg); } 28% { transform: perspective(260px) rotateY(18deg) rotate(7deg); }
+    55% { transform: perspective(260px) rotateY(58deg) rotate(12deg); } 80% { transform: perspective(260px) rotateY(-22deg) rotate(-6deg); } to { transform: perspective(260px) rotateY(-62deg) rotate(-14deg); }
+  }
+  @media (prefers-reduced-motion: reduce) { .leaf-layer { display: none; } }   /* like forlife.care: with reduced motion the leaves are gone */
+  /* the Rx mark, once, at the end of an assessment */
+  .signoff { display: flex; align-items: center; gap: 10px; padding: 8px 4px; color: var(--ink-500); font-size: 14px; line-height: 1.3; }
+  .signoff img { width: 36px; height: 36px; flex: none; }
+  .signoff strong { color: var(--ink-900); font-weight: 600; }
 </style>
 <link rel="stylesheet" href="/static/blue_door/blue_door.css">
 </head>
 <body data-view="gate">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <!-- brightness along the edges of the leaf icon: a thin lighter line inside every edge, stronger on the top-left. No glow outside the shape. -->
+    <filter id="leafRim" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">
+      <feMorphology in="SourceAlpha" operator="erode" radius="0.5" result="inner"/>
+      <feComposite in="SourceAlpha" in2="inner" operator="out" result="edge"/>
+      <feFlood flood-color="#e3f3ee" flood-opacity="0.5"/><feComposite in2="edge" operator="in" result="edgeLight"/>
+      <feOffset in="SourceAlpha" dx="0.9" dy="0.9" result="shifted"/>
+      <feComposite in="SourceAlpha" in2="shifted" operator="out" result="facing"/>
+      <feFlood flood-color="#ffffff" flood-opacity="0.9"/><feComposite in2="facing" operator="in" result="litLight"/>
+      <feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="edgeLight"/><feMergeNode in="litLight"/></feMerge>
+    </filter>
+  </defs>
+</svg>
 <header>
   <div class="hbrand">
     <button id="menu-btn" type="button" aria-label="Open your family list">
@@ -388,7 +428,7 @@
 <main id="thread" aria-live="polite">
   <div class="wrap" id="messages">
     <section id="hero">
-      <div class="eyebrow">ForLife Companion</div>
+      <div class="eyebrow">Vera &middot; ForLife Companion</div>
       <h1>What&rsquo;s worrying you today?</h1>
       <p>Tell me about a symptom, for yourself or someone in your family. I&rsquo;ll remember what we&rsquo;ve talked about.</p>
       <div class="chips">
@@ -535,6 +575,34 @@ function conditionCard(c) {
   </details>`;
 }
 
+/* "My first read": Vera starts one sentence with those words to say what it could be so far. It is lifted out of her reply into its own box (above her question).
+   It needs her to write it in English; in another language the reply simply shows as a normal bubble. The saved reply is not changed, so she still remembers what she said. */
+function splitFirstRead(text) {
+  const m = /(^|\s)(my first read\b[^.!?]*(?:[.!?]+|$))/i.exec(text);
+  if (!m) return null;
+  const start = m.index + m[1].length, read = m[2].trim();
+  let body = read.replace(/^my first read(?:\s+(?:is|would be|seems to be|suggests))?\s*(?:that\s+)?[:,]?\s*/i, '');   // the box already says "My first read"
+  body = body.charAt(0).toUpperCase() + body.slice(1);
+  if (body.length < 12) body = read;   // nothing useful left once the opening words are off
+  return { before: text.slice(0, start).trim(), body, after: text.slice(start + m[2].length).trim() };
+}
+const LEAF_PATH = 'M12 1C4.8 8.2 3.2 15.4 6.6 21.2 8.4 24.3 10.4 26 12 27c1.6-1 3.6-2.7 5.4-5.8C20.8 15.4 19.2 8.2 12 1Z';   // the forlife.care leaf
+const LEAF_VEIN = 'M12 4.5c-2.4 5.6-2.9 11.6-1.2 18.4';
+const LEAVES = [   // left %, opacity, fall s, delay s, sway s, sway px, flutter s, size, fill (r g b)
+  [6, .42, 17, -1, 7, 12, 5.2, .78, '125 158 138'], [27, .30, 21, -9, 9, 9, 6.4, .55, '149 133 103'], [52, .34, 15, -5, 6, 14, 4.6, .66, '132 151 128'],
+  [72, .28, 24, -14, 10, 10, 7, .5, '143 140 112'], [88, .40, 19, -3, 8, 11, 5.8, .72, '138 145 119'], [40, .26, 23, -18, 11, 8, 6.8, .46, '162 120 84'],
+];
+const LEAF_LAYER = `<div class="leaf-layer" aria-hidden="true">${LEAVES.map(([x, op, fall, delay, sw, swPx, fl, s, fill]) =>
+  `<span class="leaf" style="--x:${x}%;--op:${op};--fall:${fall}s;--delay:${delay}s"><span class="leaf-sway" style="--sway-t:${sw}s;--sway:${swPx}px"><span class="leaf-flutter" style="--flutter-t:${fl}s;--s:${s}"><svg viewBox="0 0 24 28" width="34" height="40" fill="none" aria-hidden="true"><path d="${LEAF_PATH}" fill="rgb(${fill})"/><path d="${LEAF_VEIN}" stroke="#faf6ee" stroke-opacity=".55" stroke-width="1.1" stroke-linecap="round"/></svg></span></span></span>`).join('')}</div>`;
+const LEAF_ICON = `<svg class="leaf-icon" viewBox="0 0 24 28" fill="none" aria-hidden="true"><path d="${LEAF_PATH}" fill="#2da382"/><path d="${LEAF_VEIN}" stroke="#faf6ee" stroke-opacity=".6" stroke-width="1.1" stroke-linecap="round"/></svg>`;
+const thoughtBox = (body) => `<section class="thought" aria-label="My first read">${LEAF_LAYER}<div class="thought-head">${LEAF_ICON}<span class="thought-label">My first read</span></div><p class="thought-text">${inline(body)}</p></section>`;
+function replyBubbles(text, forwho, assessed) {
+  const fr = assessed ? null : splitFirstRead(text);
+  if (!fr) return `<div class="bubble">${forwho}${inline(text)}</div>`;
+  return (fr.before ? `<div class="bubble">${forwho}${inline(fr.before)}</div>` : '') + thoughtBox(fr.body) + (fr.after ? `<div class="bubble">${inline(fr.after)}</div>` : '');
+}
+const SIGNOFF = `<div class="signoff"><img src="/static/brand/rx_logo.svg" alt="" width="36" height="36"><span><strong>Vera</strong> &middot; ForLife Companion</span></div>`;
+
 const SOON = `<aside class="soon" aria-label="Coming soon in version 2">
     <div class="soon-head"><span class="soon-tag">Coming soon &middot; V2</span><span class="soon-title">Take the next step, right here</span></div>
     <div class="soon-actions">
@@ -606,7 +674,7 @@ function renderAssistant(content) {
   const forwho = d.patient_label ? `<div class="forwho">For ${esc(String(d.patient_label))}</div>` : '';
   let html = emergency
     ? `<div class="bubble urgent"><div class="urgent-label">Please get help now</div><p>${inline(text)}</p>${doNow.length && !assessed ? ol(doNow) : ''}</div>`
-    : `<div class="bubble">${forwho}${inline(text)}</div>`;
+    : replyBubbles(text, forwho, assessed);
   if (emergency && assessed && d.reply && typeof d.headline === 'string') html += `<div class="bubble">${forwho}${inline(d.headline)}</div>`;
   if (assessed) {
     html += `<section class="assess" aria-label="What this could be">${conditions.map(conditionCard).join('')}
@@ -637,6 +705,7 @@ function renderAssistant(content) {
   const urgent = conditions.some((c) => c.medical_risk === 'immediate' && c.likelihood !== 'least_likely');
   if (assessed && !emergency && !urgent) html += helpBox(cd, d.patient);   // not on an emergency, nor when the most likely or the likely condition needs a doctor today (the server checks too)
   if (assessed) html += SOON;   // after an assessment only
+  if (assessed && !emergency) html += SIGNOFF;   // the Rx mark at the end; not on an emergency, where the emergency message stays the only thing to read
   const older = d.kind ? [] : list(d.questions || (d.question ? [d.question] : []));   // chats saved in the old question-list format
   if (older.length) html += `<div class="bubble">${ol(older)}</div>`;
   return html;
@@ -660,7 +729,7 @@ function addMessage(role, content, at) {
   const row = document.createElement('div'); row.className = `row ${role}`;
   const time = when.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
   const body = role === 'assistant' ? renderAssistant(content) : `<div class="bubble">${esc(content)}</div>`;
-  row.innerHTML = (role === 'assistant' ? '<div class="avatar" aria-hidden="true">F</div>' : '') +
+  row.innerHTML = (role === 'assistant' ? '<div class="avatar" aria-hidden="true">V</div>' : '') +
     `<div class="col">${body}<div class="meta">${time}</div></div>`;
   messages.append(row); added.push(row);
   return { row, remove: () => { added.forEach((e) => e.remove()); if (added.length === 2) lastDay = prevDay; } };
@@ -668,7 +737,7 @@ function addMessage(role, content, at) {
 
 function addThinking() {
   const row = document.createElement('div'); row.className = 'row assistant';
-  row.innerHTML = '<div class="avatar" aria-hidden="true">F</div><div class="col"><div class="bubble thinking"><span class="dots"><i></i><i></i><i></i></span>Thinking it through&hellip;</div></div>';
+  row.innerHTML = '<div class="avatar" aria-hidden="true">V</div><div class="col"><div class="bubble thinking"><span class="dots"><i></i><i></i><i></i></span>Vera is listening&hellip;</div></div>';
   messages.append(row); thread.scrollTo({ top: thread.scrollHeight });
   return row;
 }
@@ -684,6 +753,12 @@ async function loadHistory() {
   rows.forEach((r) => addMessage(r.role, r.content, r.at));
   showChat();
   thread.scrollTo({ top: thread.scrollHeight, behavior: 'instant' });
+  if (/[?&]preview=firstread\b/.test(location.search)) previewFirstRead();
+}
+/* To see the "My first read" box without having a chat: open the page with ?preview=firstread. A sample reply is shown on the screen only; nothing is saved or sent. */
+function previewFirstRead() {
+  const sample = JSON.stringify({ kind: 'interview', reply: "That's tiring for you both. My first read is a common cold settling on his chest, so I'm checking his breathing next. Is he breathing fast or hard, even when he rests?" });
+  addMessage('assistant', sample, new Date().toISOString()).row.scrollIntoView({ block: 'start' });
 }
 
 /* ---- sending ---- */

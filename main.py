@@ -35,7 +35,7 @@ import family
 import places
 import reviews
 import shop
-from prompts import (
+from VERA_v0_prompts import (   # Vera's prompts. To go back to the earlier ones, import from prompts here instead (same names).
     CONCLUSION_PROMPT, CONCLUSION_SCHEMA, CONFIDENCE_TO_CONCLUDE, EMERGENCY_NOTE, GROUP_RULES, GROUP_TITLES,
     HELP_PROMPT, INTERVIEW_PROMPT, INTERVIEW_SCHEMA, REOPEN_BELOW, TERMS_PROMPT, TERMS_SCHEMA,
 )
@@ -53,9 +53,12 @@ INTERVIEW_EFFORT = os.environ.get("INTERVIEW_EFFORT", EFFORT)
 TERMS_MODEL = os.environ.get("TERMS_MODEL", "claude-haiku-5-5")   # writes the words used to look for conditions in reviews (a small, quick job)
 REQUIRED = ["DATABASE_URL", "ANTHROPIC_API_KEY", "SUPABASE_URL"]
 TRY_AGAIN = "I am facing some internal issues, don't worry I will come back to you and help you with your cure!"
-# CONFIDENCE_TO_CONCLUDE (70) and REOPEN_BELOW (60) live in prompts.py, next to the prompt text that quotes them.
+# CONFIDENCE_TO_CONCLUDE (70) and REOPEN_BELOW (60) live in VERA_v0_prompts.py, next to the prompt text that quotes them.
 MIN_QUESTIONS = 4            # never give the assessment before this many questions have been asked
-MAX_QUESTIONS = 8            # always give it once this many have been asked
+MAX_QUESTIONS = 8            # give it once this many have been asked...
+EXTRA_QUESTIONS = 2          # ...unless Vera is still unsure (confidence under REOPEN_BELOW): then up to this many more questions
+PROMPT_VERSION = "vera-v0.2"  # saved with every reply, so any chat can be traced to the prompt that wrote it
+FIRST_READ = "my first read"  # Vera's tentative first sentence on what it could be; the page lifts it into its own box
 
 MEMBER_COLUMNS = "id, relation, name, dob, sex, conditions, medicines, allergies, pincode"
 # Each member's own doctors as a JSON list, added to every member query ({m} is the members alias)
@@ -66,7 +69,7 @@ DOCTORS_JSON = (
 MEMBER_SELECT = f"select {', '.join('m.' + c for c in MEMBER_COLUMNS.split(', '))}, {DOCTORS_JSON.format(m='m')} as doctors from members m"
 MEMBERS_QUERY = f"{MEMBER_SELECT} where m.visitor_id = $1 order by m.created_at"
 REFUSAL = {"kind": "refusal", "reply": "Sorry, I can't help with that one. If this is urgent, please call 112 or see a doctor."}
-HIDDEN = ("confidence", "reopened", "state", "patient")  # kept in the database for the server, never sent to the browser
+HIDDEN = ("confidence", "reopened", "state", "patient", "prompt")  # kept in the database for the server, never sent to the browser
 
 
 @asynccontextmanager
@@ -202,22 +205,57 @@ def kind_of(d: dict) -> str:
 
 
 def read_stage(rows) -> tuple[str, int]:
-    """Replay the saved doctor turns: ('interviewing' or 'assessed') and how many questions this interview has asked."""
-    stage, asked = "interviewing", 0
+    """Replay the saved doctor turns: ('interviewing' or 'assessed') and how many questions this interview has asked.
+    The count starts again for a new case: after an emergency message the chat carried on from, and when the interview moves to another person."""
+    stage, asked, who = "interviewing", 0, ""
     for r in rows:
         if r["role"] != "assistant":
             continue
         d = as_dict(r["content"])
         kind = kind_of(d)
         if kind == "conclusion":
-            stage, asked = "assessed", 0
+            stage, asked, who = "assessed", 0, ""
+        elif kind == "emergency":
+            if stage == "interviewing":  # an emergency message with no card: whatever comes next is a new case
+                asked, who = 0, ""
         elif kind == "interview":
             if stage == "assessed":
                 if d.get("reopened"):  # new information after the assessment: the doctor went back to asking
-                    stage, asked = "interviewing", 1
+                    stage, asked, who = "interviewing", 1, d.get("patient") or ""
             else:
+                p = d.get("patient") or ""
+                if p and who and p.casefold() != who.casefold():
+                    asked = 0  # a different person in the middle of the interview: their questions are counted on their own
+                who = p or who
                 asked += 1
     return stage, asked
+
+
+def said_first_read(rows) -> bool:
+    """Has Vera already given her first read in this interview? (Looks back as far as the last assessment.)"""
+    for r in reversed(rows):
+        if r["role"] != "assistant":
+            continue
+        d = as_dict(r["content"])
+        if kind_of(d) == "conclusion":
+            return False
+        if FIRST_READ in str(d.get("reply") or "").casefold():
+            return True
+    return False
+
+
+FIRST_READ_NOW = (' Give your first read in this reply: one plain, tentative sentence starting "My first read is..." on what this could be so far '
+                  "and why you ask next, then your next question.")
+
+
+def build_stage_line(stage: str, asked_before: int, first_read_done: bool) -> str:
+    """The last line of what Vera is told: where the consultation is, her question count, and (once) when to give her first read."""
+    if stage != "interviewing":
+        return "STAGE: the assessment has already been given; the patient is following up."
+    line = f"STAGE: you are still taking the history. This is question {asked_before + 1} of {MAX_QUESTIONS}."
+    if not first_read_done and asked_before in (2, 3):  # the moment for the first read, so it appears every time and does not depend on her remembering
+        line += FIRST_READ_NOW
+    return line
 
 
 def last_patient(rows) -> str:
@@ -268,10 +306,12 @@ def decide(stage: str, asked_before: int, iv: dict) -> tuple[str, str]:
         if confidence < REOPEN_BELOW:
             return "ask", "new information lowered confidence"
         return "answer", "follow-up"
-    if iv["ready_now"]:
+    if iv["ready_now"] and not (confidence < REOPEN_BELOW and asked_before < MIN_QUESTIONS):  # not while Vera is unsure and has barely begun
         return "conclude", "patient asked for an answer"
     if asked_before >= MAX_QUESTIONS:
-        return "conclude", "maximum questions reached"
+        if confidence >= REOPEN_BELOW or asked_before >= MAX_QUESTIONS + EXTRA_QUESTIONS:
+            return "conclude", "maximum questions reached"
+        return "ask", "still unsure: an extra question"
     if asked_before < MIN_QUESTIONS:
         return "ask", "minimum questions not reached"
     if confidence >= CONFIDENCE_TO_CONCLUDE:
@@ -694,11 +734,7 @@ async def chat(body: ChatIn, visitor_id: User):
     messages.append({"role": "user", "content": stamp(asked, text)})
 
     # 3. interview step: the doctor's reply plus a hidden confidence; then the stop rule decides what to send
-    stage_line = (
-        "STAGE: you are still taking the history."
-        if stage == "interviewing"
-        else "STAGE: the assessment has already been given; the patient is following up."
-    )
+    stage_line = build_stage_line(stage, asked_before, said_first_read(rows))
     system = "\n\n".join(part for part in (INTERVIEW_PROMPT, file_text, blocks, stage_line) if part)
     iv = await ask_claude(system, messages, INTERVIEW_SCHEMA, INTERVIEW_EFFORT, 6000, interview_ok)
     if iv is None:
@@ -727,6 +763,7 @@ async def chat(body: ChatIn, visitor_id: User):
                 "kind": "interview", "reply": iv["reply"], "confidence": iv["confidence"], "patient": iv["patient"],
                 "reopened": stage == "assessed" and action == "ask",
             }
+    content = {**content, "prompt": PROMPT_VERSION}  # which prompt wrote this reply (hidden from the browser)
     reply = json.dumps(content, ensure_ascii=False)  # stored as-is, hidden fields included
 
     # 4. save both sides, send the reply (without hidden fields) back to the page
